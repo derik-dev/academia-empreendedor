@@ -1805,11 +1805,12 @@ body :is(.eyebrow,.hero h1 em,.login-art-copy h1 em,.blog-banner h1 em,.brand-ma
 .admin-lesson-cover-remove:hover{background:rgba(239,68,68,.32)}
 @media(max-width:800px){.admin-lesson-form-row{grid-template-columns:1fr}}
 .admin-lesson-form-error{margin:8px 0 0;color:#f87171;font-size:11px}
-.admin-lesson-form-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px}
-.admin-lesson-cancel-btn{padding:7px 14px;border:1px solid rgba(255,255,255,.12);border-radius:6px;background:transparent;color:#8da4b8;font-size:12px;font-weight:600;cursor:pointer;transition:.14s}
+.admin-lesson-form-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07)}
+.admin-lesson-cancel-btn{padding:9px 18px;border:1px solid rgba(255,255,255,.12);border-radius:7px;background:transparent;color:#8da4b8;font-size:13px;font-weight:600;cursor:pointer;transition:.14s}
 .admin-lesson-cancel-btn:hover{background:rgba(255,255,255,.05)}
-.admin-lesson-confirm-btn{display:flex;align-items:center;gap:6px;padding:7px 16px;border:0;border-radius:6px;background:#1d7ec7;color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:background .14s}
-.admin-lesson-confirm-btn:hover{background:#1a6fb0}
+.admin-lesson-confirm-btn{display:flex;align-items:center;gap:8px;padding:11px 24px;border:0;border-radius:7px;background:#1d7ec7;color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:background .14s,box-shadow .14s;box-shadow:0 4px 14px rgba(29,126,199,.35)}
+.admin-lesson-confirm-btn:hover{background:#1a6fb0;box-shadow:0 6px 18px rgba(29,126,199,.45)}
+.admin-lesson-confirm-btn:disabled{opacity:.6;cursor:wait;box-shadow:none}
 .admin-add-lesson-btn{display:flex;align-items:center;gap:7px;width:100%;padding:10px 14px;border:1px dashed rgba(29,126,199,.3);border-radius:8px;background:rgba(29,126,199,.04);color:#4a8ec7;font-size:12px;font-weight:600;cursor:pointer;transition:border-color .14s,background .14s}
 .admin-add-lesson-btn:hover{border-color:rgba(29,126,199,.55);background:rgba(29,126,199,.08)}
 
