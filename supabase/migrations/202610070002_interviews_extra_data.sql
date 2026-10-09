@@ -1,0 +1,6 @@
+insert into public.interviews (slug, title, subtitle, guest, guest_role, duration, status, published_at) values
+  ('construindo-times-de-alta-performance', 'Construindo times de alta performance', 'Como contratar, reter e motivar pessoas que realmente entregam resultados.', 'Ricardo Nunes', 'CEO & Investidor', '1h 04min', 'published', '2024-03-05 10:00:00+00'),
+  ('da-ideia-ao-primeiro-milhao', 'Da ideia ao primeiro milhão', 'O caminho real entre validar uma ideia e escalar um negócio lucrativo.', 'Mariana Costa', 'Fundadora & Empreendedora Serial', '58:44', 'published', '2024-02-20 10:00:00+00'),
+  ('marketing-sem-orcamento', 'Marketing sem orçamento', 'Como crescer uma audiência e gerar vendas com recursos mínimos.', 'Felipe Andrade', 'Head de Growth', '47:30', 'published', '2024-02-08 10:00:00+00'),
+  ('financas-para-fundadores', 'Finanças para fundadores', 'O que todo empreendedor precisa entender sobre dinheiro antes de escalar.', 'Ana Lima', 'CFO & Consultora Financeira', '1h 12min', 'published', '2024-01-25 10:00:00+00'),
+  ('vendas-consultivas-b2b', 'Vendas consultivas B2B', 'Como vender serviços de alto valor com método e consistência.', 'Bruno Souza', 'Diretor Comercial', '55:18', 'published', '2024-01-10 10:00:00+00');
