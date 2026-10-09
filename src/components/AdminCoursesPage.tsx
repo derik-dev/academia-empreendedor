@@ -9,7 +9,7 @@ import { cardCover } from '../lib/cardCover'
 import { getProfessorPhoto } from '../lib/adminAuthors'
 import { AdminPodcastCatalog, Waveform } from './AdminPodcastCatalog'
 import { AdminHeroArtwork } from './AdminHeroArtwork'
-import { AdminSelect } from './AdminSelect'
+import { AdminSelect, type AdminSelectOption } from './AdminSelect'
 import { getYouTubeVideoId } from '../lib/youtube'
 import { correctText, generateArticle, type GenerateParams } from '../lib/groq'
 
@@ -109,6 +109,15 @@ const blankDraft: CourseDraft = {
   status: 'draft', coverUrl: '', file: null, notesEnabled: true, lessonCount: '', durationText: '',
   level: null, lessons: [], removedLessonIds: [], articleCategory: 'Mentalidade', interviewAuthor: '',
 }
+
+const defaultArticleCategories: AdminSelectOption[] = [
+  { value: 'Mentalidade', label: 'Mentalidade', color: '#ec4899' },
+  { value: 'Negócios', label: 'Negócios', color: '#3b82f6' },
+  { value: 'Produtividade', label: 'Produtividade', color: '#10b981' },
+  { value: 'Carreira', label: 'Carreira', color: '#f59e0b' },
+  { value: 'Dinheiro', label: 'Dinheiro', color: '#22c55e' },
+  { value: 'Hábitos', label: 'Hábitos', color: '#8b5cf6' },
+]
 
 const sectionCategory: Partial<Record<AdminSection, Course['category']>> = {
   courses: 'miniseries', podcasts: 'podcast', interviews: 'interview', zoom: 'zoom_recording', blog: 'blog',
@@ -262,6 +271,12 @@ export function AdminCoursesPage() {
   const [aiGenerateLoading, setAiGenerateLoading] = useState(false)
   const [generateForm, setGenerateForm] = useState<GenerateParams>({ tema: '', conhecimento: '', tempoLeitura: '5' })
   const [aiError, setAiError] = useState('')
+  const [articleCategories, setArticleCategories] = useState<AdminSelectOption[]>(defaultArticleCategories)
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [newCategoryColor, setNewCategoryColor] = useState('#ec4899')
+  const [categorySaving, setCategorySaving] = useState(false)
+  const [categoryError, setCategoryError] = useState('')
 
   const loadDashboard = useCallback(async () => {
     const client = adminSupabase
@@ -290,11 +305,16 @@ export function AdminCoursesPage() {
       .catch(() => { /* silencioso — sparklines ficam vazios */ })
     setError(failed ? 'Não foi possível carregar todos os dados. Confira se a migration do painel foi aplicada.' : '')
     setStats({ students: allStudents.count ?? 0, newStudents: newStudents.count ?? 0, publishedCourses: publishedCourses.count ?? 0, visitsThisMonth: visitCounts[visitCounts.length - 1] ?? 0 })
-    const [interviewRows, articleRows, zoomRows] = await Promise.all([
+    const [interviewRows, articleRows, zoomRows, categoryRows] = await Promise.all([
       client.from('interviews').select('id,slug,title,subtitle,guest,guest_role,author,cover_url,duration,video_id,published_at,status,created_at').order('created_at', { ascending: false }),
       client.from('articles').select('id,slug,title,excerpt,category,read_time,image_url,published_at,status,created_at').order('created_at', { ascending: false }),
       client.from('zoom_recordings').select('id,title,description,type,category,duration,thumb_url,video_url,recorded_at,status').order('recorded_at', { ascending: false }),
+      client.from('article_categories').select('name,color').order('name'),
     ])
+    if (!categoryRows.error && categoryRows.data) {
+      const customCategories = categoryRows.data.map(category => ({ value: category.name, label: category.name, color: category.color }))
+      setArticleCategories([...defaultArticleCategories, ...customCategories.filter(category => !defaultArticleCategories.some(defaultCategory => defaultCategory.value.toLocaleLowerCase('pt-BR') === category.value.toLocaleLowerCase('pt-BR')))])
+    }
     const mappedInterviews: Course[] = (interviewRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.subtitle ?? '', cover_url: r.cover_url ?? '', instructor: r.guest ?? '', category: 'interview' as const, video_url: r.video_id ? `https://www.youtube.com/watch?v=${r.video_id}` : null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
     const mappedArticles: Course[] = (articleRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.excerpt ?? '', cover_url: r.image_url ?? '', instructor: '', category: 'blog' as const, video_url: null, body: null, lesson_count: null, duration_text: r.read_time ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
     const mappedZoom: Course[] = (zoomRows.data ?? []).map(r => ({ id: r.id, slug: r.id, title: r.title, description: r.description ?? '', cover_url: r.thumb_url ?? '', instructor: '', category: 'zoom_recording' as const, video_url: r.video_url ?? null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.recorded_at, created_at: r.recorded_at ?? new Date().toISOString() }))
@@ -351,16 +371,44 @@ export function AdminCoursesPage() {
 
   useEffect(() => {
     if (view !== 'form') return
-    document.body.style.overflow = 'hidden'
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (categoryModalOpen) { setCategoryModalOpen(false); return }
         if (aiGenerateOpen) { setAiGenerateOpen(false); return }
         resetForm()
       }
     }
     window.addEventListener('keydown', onKey)
-    return () => { document.body.style.overflow = ''; window.removeEventListener('keydown', onKey) }
-  }, [view, resetForm, aiGenerateOpen])
+    return () => { window.removeEventListener('keydown', onKey) }
+  }, [view, resetForm, aiGenerateOpen, categoryModalOpen])
+
+  const createArticleCategory = async (event: FormEvent) => {
+    event.preventDefault()
+    const name = newCategoryName.trim()
+    if (!adminSupabase || !name || categorySaving) return
+    if (articleCategories.some(category => category.value.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) {
+      setCategoryError('Já existe uma categoria com esse nome.')
+      return
+    }
+    const slug = slugify(name)
+    if (!slug) {
+      setCategoryError('Use pelo menos uma letra ou um número no nome da categoria.')
+      return
+    }
+    setCategorySaving(true)
+    setCategoryError('')
+    const { data, error: insertError } = await adminSupabase.from('article_categories').insert({ name, slug, color: newCategoryColor }).select('name,color').single()
+    setCategorySaving(false)
+    if (insertError || !data) {
+      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível salvar. Confira se a migration de categorias do blog foi aplicada.')
+      return
+    }
+    setArticleCategories(current => [...current, { value: data.name, label: data.name, color: data.color }])
+    setDraft(current => ({ ...current, articleCategory: data.name }))
+    setNewCategoryName('')
+    setNewCategoryColor('#ec4899')
+    setCategoryModalOpen(false)
+  }
 
   const openLessonEdit = (lesson: LessonDraft) => {
     setActiveLessonForm({ id: lesson.id, title: lesson.title, videoUrl: lesson.videoUrl, durationText: lesson.durationSeconds > 0 ? formatDurationSeconds(lesson.durationSeconds) : '', coverFile: null, coverPreview: lesson.coverUrl, isNew: false })
@@ -645,7 +693,7 @@ export function AdminCoursesPage() {
   const isCatalogSection = section in sectionCategory
   const meta = sectionMeta[section] ?? sectionMeta.courses!
   return <AdminShell section={section} onSectionChange={changeSection}><main className={'page-content admin-page' + (section === 'podcasts' && view === 'list' ? ' admin-page--podcasts' : section === 'courses' && view === 'list' ? ' admin-page--courses' : section === 'interviews' && view === 'list' ? ' admin-page--interviews' : '')}>
-    <div className="admin-page-heading"><div><p className="eyebrow"><LayoutDashboard size={13}/> PAINEL DA ACADEMIA</p><h1>{sectionInfo[section].title}</h1><p>{sectionInfo[section].description}</p></div><div className="admin-page-heading-actions">{isCatalogSection && view === 'list' && <button className="button admin-create-btn" type="button" onClick={() => { resetForm(); setView('form') }}><Plus size={16}/> Criar {meta.item}</button>}<Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={16}/> Ver página <ArrowUpRight size={15}/></Link></div></div>
+    {view === 'form' ? <div className="admin-form-page-nav"><button type="button" className="admin-back-btn" onClick={resetForm}><ArrowLeft size={16}/> Voltar para {meta.plural}</button><Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={16}/> Ver página <ArrowUpRight size={15}/></Link></div> : <div className="admin-page-heading"><div><p className="eyebrow"><LayoutDashboard size={13}/> PAINEL DA ACADEMIA</p><h1>{sectionInfo[section].title}</h1><p>{sectionInfo[section].description}</p></div><div className="admin-page-heading-actions">{isCatalogSection && <button className="button admin-create-btn" type="button" onClick={() => { resetForm(); setView('form') }}><Plus size={16}/> Criar {meta.item}</button>}<Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={16}/> Ver página <ArrowUpRight size={15}/></Link></div></div>}
     {section === 'courses' && view === 'list' && <section className="podcast-admin-hero podcast-admin-hero--courses"><AdminHeroArtwork variant="miniseries"/><div className="podcast-admin-hero-inner"><p className="podcast-admin-eyebrow"><Grid2X2 size={14}/> PAINEL DA ACADEMIA</p><h1>{sectionInfo[section].title}</h1><p>{sectionInfo[section].description}</p><div className="podcast-admin-hero-actions"><button className="podcast-admin-create" type="button" onClick={() => { resetForm(); setView('form') }}><Plus size={18}/> Criar minissérie</button><Link className="podcast-admin-site" to="/minisseries"><Eye size={16}/> Ver no site <ArrowUpRight size={15}/></Link></div></div></section>}
     {(error || (notice && view !== 'form')) && createPortal(<AdminFeedback type={error ? 'error' : 'success'} message={error || notice} onClose={() => error ? setError('') : setNotice('')}/>, document.body)}
     {section === 'overview' && <>
@@ -705,10 +753,7 @@ export function AdminCoursesPage() {
               })}</div>
           : <div className="admin-courses-empty"><BookOpen size={28}/><strong>Nenhum conteúdo ainda</strong><span>{searchQuery || statusFilter !== 'all' ? 'Nenhum resultado. Tente outros filtros.' : `Clique em "Criar ${meta.item}" para adicionar o primeiro.`}</span></div>}
     </section>}
-    {isCatalogSection && view === 'form' && createPortal(
-      <div className="admin-edit-backdrop" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) resetForm() }}>
-        <div className="admin-edit-modal">
-          <button type="button" className="admin-edit-modal-close" onClick={resetForm} aria-label="Fechar"><X size={18}/></button>
+    {isCatalogSection && view === 'form' && <section className="admin-form-view" aria-label={`Formulário de ${meta.item}`}>
           {notice && <AdminFeedback type="success" message={notice} onClose={() => setNotice('')} modal/>}
       <form id="admin-course-form" onSubmit={saveCourse} className="admin-form-layout">
         {/* Coluna principal */}
@@ -742,16 +787,10 @@ export function AdminCoursesPage() {
             <label className="admin-field"><span>Descrição</span><textarea value={draft.description} onChange={e => setDraft(c => ({ ...c, description: e.target.value }))} placeholder={`Sobre este ${meta.item}…`} required rows={4} maxLength={1200}/></label>
             {section === 'blog' && (
               <div className="admin-field-row-equal">
-                <label className="admin-field" style={{ marginTop: 0 }}><span>Categoria</span>
-                  <AdminSelect ariaLabel="Categoria" className="admin-category-select" value={draft.articleCategory} onChange={v => setDraft(c => ({ ...c, articleCategory: v }))} options={[
-                    { value: 'Mentalidade',   label: 'Mentalidade',   color: '#ec4899' },
-                    { value: 'Negócios',      label: 'Negócios',      color: '#3b82f6' },
-                    { value: 'Produtividade', label: 'Produtividade', color: '#10b981' },
-                    { value: 'Carreira',      label: 'Carreira',      color: '#f59e0b' },
-                    { value: 'Dinheiro',      label: 'Dinheiro',      color: '#22c55e' },
-                    { value: 'Hábitos',       label: 'Hábitos',       color: '#8b5cf6' },
-                  ]}/>
-                </label>
+                <div className="admin-field admin-category-field" style={{ marginTop: 0 }}>
+                  <div className="admin-category-field-heading"><span>Categoria</span><button type="button" className="admin-category-create-btn" onClick={() => { setCategoryError(''); setCategoryModalOpen(true) }}><Plus size={14}/> Criar categoria</button></div>
+                  <AdminSelect ariaLabel="Categoria" className="admin-category-select" value={draft.articleCategory} onChange={v => setDraft(c => ({ ...c, articleCategory: v }))} options={articleCategories}/>
+                </div>
                 <label className="admin-field" style={{ marginTop: 0 }}><span>Tempo de leitura</span><input value={draft.durationText} onChange={e => setDraft(c => ({ ...c, durationText: e.target.value }))} placeholder="Ex.: 5 min de leitura" maxLength={40}/></label>
               </div>
             )}
@@ -926,7 +965,19 @@ export function AdminCoursesPage() {
           </div>}
         </div>
       </form>
-        </div>
+    </section>}
+    {view === 'form' && section === 'blog' && categoryModalOpen && createPortal(
+      <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-category-modal-title" onClick={event => { if (event.target === event.currentTarget) setCategoryModalOpen(false) }}>
+        <form className="admin-category-modal" onSubmit={createArticleCategory}>
+          <button type="button" className="admin-edit-modal-close" onClick={() => setCategoryModalOpen(false)} aria-label="Fechar"><X size={18}/></button>
+          <span className="admin-category-modal-icon"><Hash size={18}/></span>
+          <h2 id="admin-category-modal-title">Criar categoria</h2>
+          <p>Defina o nome e a cor que vai identificar esta categoria nos artigos.</p>
+          {categoryError && <p className="admin-category-modal-error" role="alert">{categoryError}</p>}
+          <label className="admin-field"><span>Nome da categoria</span><input autoFocus value={newCategoryName} onChange={event => { setNewCategoryName(event.target.value); setCategoryError('') }} placeholder="Ex.: Liderança" maxLength={40} required/></label>
+          <label className="admin-field admin-category-color-field"><span>Cor do marcador</span><span className="admin-category-color-control"><input type="color" value={newCategoryColor} onChange={event => setNewCategoryColor(event.target.value)} aria-label="Cor do marcador"/><code>{newCategoryColor.toUpperCase()}</code></span></label>
+          <div className="admin-category-modal-actions"><button type="button" className="admin-lesson-cancel-btn" onClick={() => setCategoryModalOpen(false)}>Cancelar</button><button type="submit" className="admin-ai-generate-btn" disabled={categorySaving || !newCategoryName.trim()}>{categorySaving ? <><LoaderCircle size={14} className="admin-spinner"/> Salvando…</> : <><Plus size={14}/> Criar categoria</>}</button></div>
+        </form>
       </div>,
       document.body
     )}

@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Bookmark, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, LayoutGrid, Link2, LoaderCircle, LockKeyhole, Linkedin, Mail, MoreVertical, Pause, Play, Plus, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Twitter, Video, Volume2, X } from 'lucide-react'
 import { useAuth } from './auth/useAuth'
@@ -39,8 +39,8 @@ function loadYT(): Promise<any> {
 }
 
 function ScrollToTop() { const { pathname } = useLocation(); useEffect(() => { window.scrollTo(0, 0) }, [pathname]); return null }
-function Protected({ children }: { children: React.ReactNode }) { const { user, loading } = useAuth(); if (loading) return <div className="screen-loader"><div className="loader-dot"/><span>A preparar a Academiaâ€¦</span></div>; return user ? <>{children}</> : <Navigate to="/login" replace /> }
-function AdminProtected({ children }: { children: React.ReactNode }) { const { user, loading, isAdmin } = useAdminAuth(); if (loading) return <div className="admin-login-loading">Verificando sessão administrativaâ€¦</div>; return user && isAdmin ? <>{children}</> : <Navigate to="/admin/login" replace /> }
+function Protected({ children }: { children: React.ReactNode }) { const { user, loading } = useAuth(); if (loading) return <div className="screen-loader"><div className="loader-dot"/><span>A preparar a Academia…</span></div>; return user ? <>{children}</> : <Navigate to="/login" replace /> }
+function AdminProtected({ children }: { children: React.ReactNode }) { const { user, loading, isAdmin } = useAdminAuth(); if (loading) return <div className="admin-login-loading">Verificando sessão administrativa…</div>; return user && isAdmin ? <>{children}</> : <Navigate to="/admin/login" replace /> }
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -237,7 +237,7 @@ function PodcastAudioPlayer({ videoId, title, author, image, onClose }: { videoI
   const skip = (s: number) => { const t = Math.max(0, currentTime + s); playerRef.current?.seekTo(t, true); setCurrentTime(t) }
 
   return <div className="podcast-player-bar">
-    <div style={{position:'fixed',bottom:'-9999px',width:'1px',height:'1px',overflow:'hidden',pointerEvents:'none'}}><div ref={containerRef}/></div>
+    <div style={{position:'fixed',top:0,left:0,width:'320px',height:'180px',opacity:0,pointerEvents:'none',zIndex:-1}}><div ref={containerRef}/></div>
     <div className="podcast-player-left">
       <div className="podcast-player-thumb"><img src={cardCover(image)} alt=""/></div>
       <div className="podcast-player-meta"><strong>{title}</strong><span>{author}</span></div>

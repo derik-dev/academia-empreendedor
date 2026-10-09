@@ -1,19 +1,13 @@
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
+const OPENAI_PROXY_URL = `${(import.meta.env as Record<string, string>).VITE_SUPABASE_URL.replace('/rest/v1/', '')}/functions/v1/openai-proxy`
 const OPENAI_MODEL = 'gpt-4o-mini'
-
-function apiKey(): string {
-  const k = (import.meta.env as Record<string, string>).VITE_OPENAI_API_KEY
-  if (!k) throw new Error('Configure VITE_OPENAI_API_KEY no arquivo .env')
-  return k
-}
 
 async function callAI(
   messages: { role: 'system' | 'user'; content: string }[],
   jsonMode = false,
 ): Promise<string> {
-  const res = await fetch(OPENAI_URL, {
+  const res = await fetch(OPENAI_PROXY_URL, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: OPENAI_MODEL,
       messages,
