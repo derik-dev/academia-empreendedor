@@ -88,9 +88,10 @@ export type Course = {
   lesson_count: number | null
   duration_text: string | null
   level: 'Iniciante' | 'Intermédio' | 'Avançado' | null
-  status: 'draft' | 'published'
+  status: 'draft' | 'published' | 'scheduled'
   notes_enabled: boolean
   published_at: string | null
+  scheduled_for: string | null
   created_at: string
 }
 type CourseAccess = { id: string; user_id: string; course_slug: string; accessed_at: string }
@@ -102,12 +103,14 @@ type CourseDraft = {
   videoUrl: string; body: string; status: Course['status']; coverUrl: string; file: File | null
   notesEnabled: boolean; lessonCount: string; durationText: string; level: Course['level']
   lessons: LessonDraft[]; removedLessonIds: string[]; articleCategory: string; interviewAuthor: string
+  scheduledFor: string
 }
 
 const blankDraft: CourseDraft = {
   title: '', description: '', instructor: '', category: 'miniseries', videoUrl: '', body: '',
-  status: 'draft', coverUrl: '', file: null, notesEnabled: true, lessonCount: '', durationText: '',
+  status: 'published', coverUrl: '', file: null, notesEnabled: true, lessonCount: '', durationText: '',
   level: null, lessons: [], removedLessonIds: [], articleCategory: 'Mentalidade', interviewAuthor: '',
+  scheduledFor: '',
 }
 
 const defaultArticleCategories: AdminSelectOption[] = [
@@ -260,7 +263,7 @@ export function AdminCoursesPage() {
   const [previewUrl, setPreviewUrl] = useState('')
   const [view, setView] = useState<'list' | 'form'>('list')
   const [searchQuery, setSearchQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'draft' | 'scheduled'>('all')
   const [authorFilter, setAuthorFilter] = useState('')
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest')
   const [activeLessonForm, setActiveLessonForm] = useState<ActiveLessonForm | null>(null)
@@ -288,7 +291,7 @@ export function AdminCoursesPage() {
       client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId),
       client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId).gte('created_at', monthStart.toISOString()).lt('created_at', nextMonth.toISOString()),
       client.from('courses').select('id', { count: 'exact', head: true }).eq('status', 'published'),
-      client.from('courses').select('id,slug,title,description,cover_url,instructor,category,video_url,body,notes_enabled,lesson_count,duration_text,level,status,published_at,created_at').order('created_at', { ascending: false }),
+      client.from('courses').select('id,slug,title,description,cover_url,instructor,category,video_url,body,notes_enabled,lesson_count,duration_text,level,status,published_at,scheduled_for,created_at').order('created_at', { ascending: false }),
       client.from('course_access_events').select('id,user_id,course_slug,accessed_at').neq('user_id', userId).order('accessed_at', { ascending: false }).limit(8),
     ])
     const monthRanges = Array.from({ length: 6 }, (_, index) => {
@@ -315,9 +318,9 @@ export function AdminCoursesPage() {
       const customCategories = categoryRows.data.map(category => ({ value: category.name, label: category.name, color: category.color }))
       setArticleCategories([...defaultArticleCategories, ...customCategories.filter(category => !defaultArticleCategories.some(defaultCategory => defaultCategory.value.toLocaleLowerCase('pt-BR') === category.value.toLocaleLowerCase('pt-BR')))])
     }
-    const mappedInterviews: Course[] = (interviewRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.subtitle ?? '', cover_url: r.cover_url ?? '', instructor: r.guest ?? '', category: 'interview' as const, video_url: r.video_id ? `https://www.youtube.com/watch?v=${r.video_id}` : null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
-    const mappedArticles: Course[] = (articleRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.excerpt ?? '', cover_url: r.image_url ?? '', instructor: '', category: 'blog' as const, video_url: null, body: null, lesson_count: null, duration_text: r.read_time ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
-    const mappedZoom: Course[] = (zoomRows.data ?? []).map(r => ({ id: r.id, slug: r.id, title: r.title, description: r.description ?? '', cover_url: r.thumb_url ?? '', instructor: '', category: 'zoom_recording' as const, video_url: r.video_url ?? null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.recorded_at, created_at: r.recorded_at ?? new Date().toISOString() }))
+    const mappedInterviews: Course[] = (interviewRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.subtitle ?? '', cover_url: r.cover_url ?? '', instructor: r.guest ?? '', category: 'interview' as const, video_url: r.video_id ? `https://www.youtube.com/watch?v=${r.video_id}` : null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
+    const mappedArticles: Course[] = (articleRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.excerpt ?? '', cover_url: r.image_url ?? '', instructor: '', category: 'blog' as const, video_url: null, body: null, lesson_count: null, duration_text: r.read_time ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
+    const mappedZoom: Course[] = (zoomRows.data ?? []).map(r => ({ id: r.id, slug: r.id, title: r.title, description: r.description ?? '', cover_url: r.thumb_url ?? '', instructor: '', category: 'zoom_recording' as const, video_url: r.video_url ?? null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.recorded_at, scheduled_for: r.scheduled_for ?? null, created_at: r.recorded_at ?? new Date().toISOString() }))
     setCourses([...(courseRows.data ?? []) as Course[], ...mappedInterviews, ...mappedArticles, ...mappedZoom])
     const recentAccesses = (recentAccessRows.data ?? []) as CourseAccess[]
     setCourseAccesses(recentAccesses)
@@ -512,9 +515,13 @@ export function AdminCoursesPage() {
         setLessonFormError('Clique em "Adicionar aula" para confirmar esta aula antes de salvar.')
         return
       }
-      if (section === 'courses' && draft.status === 'published' && draft.lessons.length === 0) {
+      if (section === 'courses' && (draft.status === 'published' || draft.status === 'scheduled') && draft.lessons.length === 0) {
         throw new Error('Adicione pelo menos uma aula antes de publicar a minissérie.')
       }
+      const scheduledFor = draft.status === 'scheduled' && draft.scheduledFor ? new Date(draft.scheduledFor).toISOString() : null
+      if (draft.status === 'scheduled' && !scheduledFor) throw new Error('Informe a data e hora para agendar a publicação.')
+      const finalPublishedAt = (status: Course['status'], existing: Course | undefined) =>
+        status === 'published' ? (existing?.published_at ?? new Date().toISOString()) : null
       let coverUrl = draft.coverUrl.trim()
       if (draft.file) {
         const safeName = draft.file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
@@ -530,15 +537,15 @@ export function AdminCoursesPage() {
       let savedCourseId: string | null = editingId
       if (section === 'interviews') {
         const videoId = getYouTubeVideoId(draft.videoUrl.trim()) || null
-        const vals = { slug, title: draft.title.trim(), subtitle: draft.description.trim(), guest: draft.instructor.trim(), author: draft.interviewAuthor.trim() || null, cover_url: coverUrl || null, video_id: videoId, status: draft.status, published_at: draft.status === 'published' ? existing?.published_at ?? new Date().toISOString() : null }
+        const vals = { slug, title: draft.title.trim(), subtitle: draft.description.trim(), guest: draft.instructor.trim(), author: draft.interviewAuthor.trim() || null, cover_url: coverUrl || null, video_id: videoId, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('interviews').update(vals).eq('id', editingId) : await adminSupabase.from('interviews').insert(vals)
         if (result.error) throw result.error
       } else if (section === 'blog') {
-        const vals = { slug, title: draft.title.trim(), excerpt: draft.description.trim(), category: draft.articleCategory, read_time: draft.durationText.trim() || null, image_url: coverUrl || null, content: draft.body.trim() || null, status: draft.status, published_at: draft.status === 'published' ? existing?.published_at ?? new Date().toISOString() : null }
+        const vals = { slug, title: draft.title.trim(), excerpt: draft.description.trim(), category: draft.articleCategory, read_time: draft.durationText.trim() || null, image_url: coverUrl || null, content: draft.body.trim() || null, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('articles').update(vals).eq('id', editingId) : await adminSupabase.from('articles').insert(vals)
         if (result.error) throw result.error
       } else if (section === 'zoom') {
-        const vals = { title: draft.title.trim(), description: draft.description.trim(), type: 'Aula', video_url: draft.videoUrl.trim() || null, thumb_url: coverUrl || null, duration: draft.durationText.trim() || null, status: draft.status, recorded_at: draft.status === 'published' ? existing?.published_at ?? new Date().toISOString() : null }
+        const vals = { title: draft.title.trim(), description: draft.description.trim(), type: 'Aula', video_url: draft.videoUrl.trim() || null, thumb_url: coverUrl || null, duration: draft.durationText.trim() || null, status: draft.status, recorded_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('zoom_recordings').update(vals).eq('id', editingId) : await adminSupabase.from('zoom_recordings').insert(vals)
         if (result.error) throw result.error
       } else {
@@ -557,7 +564,8 @@ export function AdminCoursesPage() {
         level: draft.level,
         status: draft.status,
         created_by: user.id,
-        published_at: draft.status === 'published' ? existing?.published_at ?? new Date().toISOString() : null,
+        published_at: finalPublishedAt(draft.status, existing),
+        scheduled_for: scheduledFor,
         updated_at: new Date().toISOString(),
       }
       if (editingId) {
@@ -580,7 +588,12 @@ export function AdminCoursesPage() {
           if (delErr) throw delErr
         }
       }
-      const successMsg = draft.status === 'published' ? (section === 'courses' ? 'Minissérie publicada na biblioteca.' : 'Conteúdo publicado na biblioteca.') : 'Rascunho salvo com sucesso.'
+      const fmtScheduled = scheduledFor ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(scheduledFor)) : ''
+      const successMsg = draft.status === 'published'
+        ? (section === 'courses' ? 'Minissérie publicada na biblioteca.' : 'Conteúdo publicado na biblioteca.')
+        : draft.status === 'scheduled'
+          ? `Agendado para ${fmtScheduled}.`
+          : 'Rascunho salvo com sucesso.'
       // Fecha o modal e mostra o aviso em uma única renderização (sem chamar resetForm que limpa setNotice)
       setDraft({ ...blankDraft, category: sectionCategory[section] ?? 'miniseries', instructor: section === 'courses' ? PROFESSOR_OPTIONS[0].value : '' })
       setEditingId(null)
@@ -610,7 +623,7 @@ export function AdminCoursesPage() {
       articleBody = data?.content ?? ''
       articleCategory = data?.category ?? 'Mentalidade'
     }
-    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, coverUrl: course.cover_url, file: null, notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: '' })
+    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, coverUrl: course.cover_url, file: null, notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: '', scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '' })
     setPreviewUrl(img(course.cover_url))
     setActiveLessonForm(null)
     setLessonFormError('')
@@ -714,12 +727,13 @@ export function AdminCoursesPage() {
       <div className="admin-section-stats">
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><BookOpen size={24}/></span><span>Total de {meta.plural}</span><strong>{visibleCourses.length}</strong><Waveform/></div>
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><CheckCircle2 size={24}/></span><span>Publicados</span><strong className="published">{visibleCourses.filter(c => c.status === 'published').length}</strong><Waveform color="green"/></div>
+        <div className="admin-section-stat"><span className="admin-section-stat-icon"><CalendarDays size={24}/></span><span>Agendados</span><strong className="scheduled">{visibleCourses.filter(c => c.status === 'scheduled').length}</strong><Waveform color="amber"/></div>
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><FileText size={24}/></span><span>Rascunhos</span><strong>{visibleCourses.filter(c => c.status === 'draft').length}</strong><Waveform color="silver"/></div>
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><BarChart2 size={24}/></span><span>Visualizações este mês</span><strong>{stats.visitsThisMonth.toLocaleString('pt-BR')}</strong><Waveform color="purple"/></div>
       </div>
       <div className="admin-filter-bar">
         <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={`Buscar ${meta.plural} ou autores…`}/></label>
-        <AdminSelect className="admin-filter-select" ariaLabel="Filtrar por status" value={statusFilter} onChange={value => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'Todos os status' }, { value: 'published', label: 'Publicados' }, { value: 'draft', label: 'Rascunhos' }]}/>
+        <AdminSelect className="admin-filter-select" ariaLabel="Filtrar por status" value={statusFilter} onChange={value => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'Todos os status' }, { value: 'published', label: 'Publicados' }, { value: 'scheduled', label: 'Agendados' }, { value: 'draft', label: 'Rascunhos' }]}/>
         {uniqueAuthors.length > 0 && <AdminSelect className="admin-filter-select" ariaLabel="Filtrar por autor" value={authorFilter} onChange={setAuthorFilter} options={[{ value: '', label: 'Todos os autores' }, ...uniqueAuthors.map(a => ({ value: a, label: a, avatar: getProfessorPhoto(a) ? img(getProfessorPhoto(a)!) : undefined }))]}/>}
         <AdminSelect className="admin-filter-select" ariaLabel="Ordenar catálogo" value={sortOrder} onChange={value => setSortOrder(value as typeof sortOrder)} options={[{ value: 'newest', label: 'Mais recentes' }, { value: 'oldest', label: 'Mais antigos' }]}/>
         {(searchQuery || statusFilter !== 'all' || authorFilter || sortOrder !== 'newest') && <button className="admin-clear-filters" type="button" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setAuthorFilter(''); setSortOrder('newest') }}>Limpar filtros</button>}
@@ -741,7 +755,7 @@ export function AdminCoursesPage() {
                     {course.instructor && <span className="admin-course-row-author"><User size={13}/> {meta.authorLabel}: {course.instructor}</span>}
                   </div>
                   <div className="admin-course-row-meta">
-                    <span className={`admin-course-status ${course.status}`}><span className="admin-status-dot"/>{course.status === 'published' ? 'Publicado' : 'Rascunho'}</span>
+                    <span className={`admin-course-status ${course.status}`}><span className="admin-status-dot"/>{course.status === 'published' ? 'Publicado' : course.status === 'scheduled' ? 'Agendado' : 'Rascunho'}</span>
                     <span className="admin-course-row-date"><CalendarDays size={12}/> {dateLabel(course.created_at)}</span>
                   </div>
                   <div className="admin-course-row-actions" onClick={e => e.stopPropagation()}>
@@ -898,7 +912,7 @@ export function AdminCoursesPage() {
             <div className="admin-form-section-head">
               <div className="admin-form-section-left"><span className="admin-form-step">{section !== 'blog' ? 3 : 2}</span><div><strong>Configurações</strong><span>Defina o nível, capa e outras opções.</span></div></div>
             </div>
-            <div className="admin-form-config-grid">
+            <div className={`admin-form-config-grid${section === 'blog' ? ' admin-form-config-grid--article' : ''}`}>
               <div className="admin-form-config-left">
                 {section === 'courses' && <label className="admin-field"><span>Nível</span><AdminSelect className="admin-field-select" ariaLabel="Nível" value={draft.level ?? ''} onChange={value => setDraft(c => ({ ...c, level: (value || null) as Course['level'] }))} options={[{ value: '', label: 'Sem nível definido' }, { value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermédio', label: 'Intermédio' }, { value: 'Avançado', label: 'Avançado' }]}/></label>}
                 {(section === 'courses' || section === 'podcasts') && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
@@ -917,10 +931,19 @@ export function AdminCoursesPage() {
           <div className="admin-form-bottom-bar">
             <div className="admin-form-bottom-estado">
               <span>Estado</span>
-              <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as Course['status'] }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'published', label: 'Publicar na biblioteca' }]}/>
+              <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as Course['status'], scheduledFor: value !== 'scheduled' ? '' : c.scheduledFor }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
+              {draft.status === 'scheduled' && (
+                <input
+                  type="datetime-local"
+                  className="admin-schedule-input"
+                  value={draft.scheduledFor}
+                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))}
+                />
+              )}
             </div>
             <button className="button admin-save-btn-new" type="submit" disabled={saving}>
-              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : <><Save size={16}/> {draft.status === 'published' ? `Publicar ${meta.item}` : editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
+              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
             </button>
           </div>
         </div>
@@ -950,7 +973,7 @@ export function AdminCoursesPage() {
                 <li><span><Clock size={12}/> Duração total</span><strong>{totalDurationText(draft.lessons) || '—'}</strong></li>
                 <li><span><GraduationCap size={12}/> Nível</span><strong>{draft.level || 'Sem nível definido'}</strong></li>
               </>}
-              <li><span><Check size={12}/> Estado</span><strong className={`admin-pub-status ${draft.status}`}><span className="admin-status-dot"/>{draft.status === 'published' ? 'Publicado' : 'Rascunho'}</strong></li>
+              <li><span><Check size={12}/> Estado</span><strong className={`admin-pub-status ${draft.status}`}><span className="admin-status-dot"/>{draft.status === 'published' ? 'Publicado' : draft.status === 'scheduled' ? (draft.scheduledFor ? `Agendado · ${new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(draft.scheduledFor))}` : 'Agendado') : 'Rascunho'}</strong></li>
             </ul>
           </div>
           {/* Dicas */}
