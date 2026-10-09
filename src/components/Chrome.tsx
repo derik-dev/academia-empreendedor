@@ -3,6 +3,98 @@ import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { ArrowRight, BarChart3, Bell, BookOpen, Camera, Check, ChevronRight, Clock, Home, Layers3, LogOut, Mail, Mic2, Newspaper, Pencil, Play, Podcast, Search, Settings, Video, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
+
+type NotifItem = { id: string; title: string; type: string; link: string; publishedAt: string }
+
+function useNotifications() {
+  const [items, setItems] = useState<NotifItem[]>([])
+  const [lastSeen, setLastSeen] = useState<Date>(() => {
+    const s = localStorage.getItem('notif_last_seen')
+    return s ? new Date(s) : new Date(0)
+  })
+
+  useEffect(() => {
+    if (!supabase) return
+    const client = supabase
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    Promise.all([
+      client.from('courses').select('slug,title,category,published_at').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
+      client.from('articles').select('slug,title,published_at').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
+      client.from('interviews').select('slug,title,published_at').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
+      client.from('zoom_recordings').select('id,title,published_at').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
+    ]).then(([courses, articles, interviews, zoom]) => {
+      const all: NotifItem[] = [
+        ...(courses.data ?? []).map(c => ({ id: `c-${c.slug}`, title: c.title, type: c.category === 'podcast' ? 'Podcast' : 'Minissérie', link: c.category === 'podcast' ? `/podcasts?podcast=${c.slug}` : `/assistir/${c.slug}`, publishedAt: c.published_at })),
+        ...(articles.data ?? []).map(a => ({ id: `a-${a.slug}`, title: a.title, type: 'Artigo', link: `/blog/${a.slug}`, publishedAt: a.published_at })),
+        ...(interviews.data ?? []).map(i => ({ id: `i-${i.slug}`, title: i.title, type: 'Entrevista', link: `/entrevistas/${i.slug}`, publishedAt: i.published_at })),
+        ...(zoom.data ?? []).map(z => ({ id: `z-${z.id}`, title: z.title, type: 'Zoom', link: `/gravacoes-zoom/${z.id}`, publishedAt: z.published_at })),
+      ].filter(i => !!i.publishedAt).sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()).slice(0, 15)
+      setItems(all)
+    })
+  }, [])
+
+  const unread = items.filter(i => new Date(i.publishedAt) > lastSeen).length
+
+  const markSeen = () => {
+    const now = new Date()
+    localStorage.setItem('notif_last_seen', now.toISOString())
+    setLastSeen(now)
+  }
+
+  return { items, unread, markSeen }
+}
+
+function NotificationBell() {
+  const { items, unread, markSeen } = useNotifications()
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const toggle = () => { if (!open) markSeen(); setOpen(o => !o) }
+
+  const formatRelative = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime()
+    const days = Math.floor(diff / 86400000)
+    if (days === 0) return 'Hoje'
+    if (days === 1) return 'Ontem'
+    if (days < 7) return `${days} dias atrás`
+    return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+  }
+
+  return (
+    <div className="notif-wrap" ref={ref}>
+      <button className="notif-btn" onClick={toggle} aria-label="Notificações">
+        <Bell size={17}/>
+        {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
+      </button>
+      {open && (
+        <div className="notif-dropdown">
+          <div className="notif-header"><Bell size={13}/><span>Novidades</span>{unread > 0 && <span className="notif-header-count">{unread} {unread === 1 ? 'nova' : 'novas'}</span>}</div>
+          {items.length === 0
+            ? <p className="notif-empty">Sem novidades nos últimos 30 dias.</p>
+            : <ul className="notif-list">
+                {items.map(item => (
+                  <li key={item.id}>
+                    <NavLink to={item.link} className="notif-item" onClick={() => setOpen(false)}>
+                      <span className="notif-type">{item.type}</span>
+                      <span className="notif-title">{item.title}</span>
+                      <span className="notif-date">{formatRelative(item.publishedAt)}</span>
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+          }
+        </div>
+      )}
+    </div>
+  )
+}
 import { areas } from '../data/content'
 import { usePublishedCourses } from '../data/usePublishedCourses'
 import { useAuth } from '../auth/useAuth'
@@ -91,6 +183,7 @@ export function Sidebar() {
             <span className="sidebar-profile-email">{user?.email}</span>
           </div>
         </Link>
+        <NotificationBell/>
         <button className="sidebar-logout" onClick={handleLogout} aria-label="Encerrar sessão">
           <LogOut size={15}/>
         </button>
