@@ -21,6 +21,43 @@ import { img } from './lib/publicUrl'
 import { cardCover } from './lib/cardCover'
 import { getProfessorPhoto } from './lib/adminAuthors'
 
+function sanitizeHtml(html: string): string {
+  const allowed = new Set(['p','br','b','strong','i','em','u','s','ul','ol','li','h1','h2','h3','h4','h5','h6','blockquote','pre','code','hr','a','img','span','div','table','thead','tbody','tr','th','td','figure','figcaption'])
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const walk = (node: Node) => {
+    const toRemove: Node[] = []
+    node.childNodes.forEach(child => {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const el = child as Element
+        const tag = el.tagName.toLowerCase()
+        if (!allowed.has(tag)) {
+          toRemove.push(child)
+          return
+        }
+        // Strip event handler and javascript: attributes
+        Array.from(el.attributes).forEach(attr => {
+          if (attr.name.startsWith('on') || (attr.value && /^\s*javascript:/i.test(attr.value))) {
+            el.removeAttribute(attr.name)
+          }
+        })
+        walk(child)
+      }
+    })
+    toRemove.forEach(n => {
+      const el = n as Element
+      // Lift children of div/span instead of dropping them entirely
+      if (el.tagName && ['script','style','iframe','object','embed','form','input','button','select','textarea','link','meta','base'].includes(el.tagName.toLowerCase())) {
+        n.parentNode?.removeChild(n)
+      } else {
+        while (el.firstChild) n.parentNode?.insertBefore(el.firstChild, n)
+        n.parentNode?.removeChild(n)
+      }
+    })
+  }
+  walk(doc.body)
+  return doc.body.innerHTML
+}
+
 let _ytApiPromise: Promise<any> | null = null
 function loadYT(): Promise<any> {
   if ((window as any).YT?.Player) return Promise.resolve((window as any).YT)
@@ -361,7 +398,7 @@ function PodcastsPage() {
           <div className="ms-hero-search"><SearchHeader /></div>
         </div>
         <div className="podcast-filters">
-          {['Todos','Mentalidade','Negócios','Crescimento','Estratégia','Empreendedorismo'].map(f => <button type="button" key={f} className={f === 'Todos' ? 'active' : ''}>{f}</button>)}
+          {['Todos','Mentalidade','Negócios','Crescimento','Estratégia','Empreendedorismo'].map(f => <span key={f} className={f === 'Todos' ? 'active' : ''}>{f}</span>)}
         </div>
       </div>
       <div className="podcast-list">
@@ -381,9 +418,9 @@ function PodcastsPage() {
               <div className="podcast-meta"><span>Em breve</span></div>
             </div>
             <div className="podcast-actions" onClick={e => e.stopPropagation()}>
-              <button type="button" className="podcast-add" aria-label="Adicionar"><Plus size={22}/></button>
+              <span className="podcast-add" aria-hidden="true"><Plus size={22}/></span>
               <button type="button" className="podcast-play" aria-label="Reproduzir" onClick={() => { const url = item.spotifyUrl || item.videoUrl || courseVideoUrls[item.slug]; if (url) { setActiveSpotify({url, title: item.title, author: item.author.replace('Com ',''), image: item.image}); openPodcast(item) } }}><Play size={20} fill="currentColor"/></button>
-              <button type="button" className="podcast-more" aria-label="Mais opções"><MoreVertical size={20}/></button>
+              <span className="podcast-more" aria-hidden="true"><MoreVertical size={20}/></span>
             </div>
           </article>
         ))}
@@ -427,9 +464,9 @@ function CourseNotes({ slug }: { slug: string }) {
   }
 
   return <section className="watch-notes" aria-labelledby="watch-notes-heading">
-    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notasâ€¦' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
+    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notas…' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
     <textarea id="course-notes" aria-label="Anotações deste curso" value={notes} onChange={e => { setNotes(e.target.value); setMessage('') }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void saveNotes() } }} placeholder="Anote ideias, aprendizados e próximos passos deste curso..." disabled={loading}/>
-    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvandoâ€¦' : 'Salvar nota'}</button></div>
+    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvando…' : 'Salvar nota'}</button></div>
   </section>
 }
 
@@ -451,6 +488,16 @@ function WatchPage() {
   const [lessons, setLessons] = useState<WatchLesson[]>([])
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null)
 
+  // Reset lessons and player when navigating to a different course
+  const prevSlugRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (prevSlugRef.current !== slug) {
+      prevSlugRef.current = slug
+      setLessons([])
+      setCurrentLessonId(null)
+    }
+  }, [slug])
+
   useEffect(() => {
     if (item?.category === 'Podcasts') return
     if (supabase && userId && item?.slug) void supabase.from('course_access_events').insert({ user_id: userId, course_slug: item.slug })
@@ -460,6 +507,9 @@ function WatchPage() {
     const client = supabase
     if (!client || !item?.slug || item.category === 'Podcasts') return
     let active = true
+    // Clear previous course state immediately before async load
+    setLessons([])
+    setCurrentLessonId(null)
     const loadLessons = async () => {
       const { data: courseRow } = await client.from('courses').select('id').eq('slug', item.slug).maybeSingle()
       if (!active || !courseRow) return
@@ -496,7 +546,7 @@ function WatchPage() {
         <div className="watch-stage">
           <div className="watch-video-col">
             {currentLesson
-              ? <YouTubeLessonPlayer courseSlug={item.slug} lessonId={currentLesson.id} videoUrl={currentLesson.videoUrl}/>
+              ? <YouTubeLessonPlayer key={currentLesson.id} courseSlug={item.slug} lessonId={currentLesson.id} videoUrl={currentLesson.videoUrl}/>
               : legacyEmbedUrl
                 ? <iframe className="watch-player" src={legacyEmbedUrl} title={`Aula de ${item.title}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/>
                 : <div className="watch-player watch-player-placeholder"><div className="watch-play-icon"><Play size={25} fill="currentColor"/></div><span className="eyebrow">PLAYER DO CURSO</span><h2>O vídeo será adicionado em breve</h2><p>O link oficial deste curso ainda não foi fornecido.</p></div>
@@ -742,7 +792,7 @@ function ZoomPage() {
                   <div className="zoom-filter-pills">
                     {zoomFilters.map(f => <button key={f} type="button" className={`zoom-pill${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>{f}</button>)}
                   </div>
-                  <button type="button" className="zoom-sort-btn"><SlidersHorizontal size={13}/> Mais recentes <ChevronDown size={12}/></button>
+                  <span className="zoom-sort-btn"><SlidersHorizontal size={13}/> Mais recentes</span>
                 </div>
 
                 <div className="zoom-list" ref={zoomGridRef}>
@@ -871,7 +921,7 @@ function BlogPage() {
       <div className="iv-search blog-search"><Search size={15}/><input type="text" placeholder="Pesquisar artigos..." value={search} onChange={e => setSearch(e.target.value)}/></div>
     </div>
 
-    {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigosâ€¦</div>}
+    {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigos…</div>}
     {!loading && !featured && <div style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a',fontSize:15}}>Nenhum artigo encontrado.</div>}
     {!loading && featured && <div className="blog-grid">
       <Link to={`/blog/${featured.slug}`} className="blog-card blog-card--featured">
@@ -969,7 +1019,7 @@ function BlogArticlePage() {
   if (loading) return (
     <div className="app-shell app-shell--home"><Sidebar/>
       <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page">
-        <div className="screen-loader" style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigoâ€¦</div>
+        <div className="screen-loader" style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigo…</div>
       </main></div>
     </div>
   )
@@ -1018,10 +1068,10 @@ function BlogArticlePage() {
           <button type="button" className="ba-share-btn" title="Compartilhar no LinkedIn" onClick={shareLinkedIn}><Linkedin size={16}/></button>
           <button type="button" className="ba-share-btn" title="Compartilhar no Twitter/X" onClick={shareTwitter}><Twitter size={16}/></button>
           <button type="button" className="ba-share-btn" title={copied ? 'Link copiado!' : 'Copiar link'} onClick={copyLink} style={copied ? {borderColor:'rgba(29,199,100,.4)',color:'#1dc764'} : undefined}>{copied ? <Check size={16}/> : <Link2 size={16}/>}</button>
-          <button type="button" className="ba-share-btn" title="Salvar"><Bookmark size={16}/></button>
+          <span className="ba-share-btn" title="Salvar" style={{opacity:0.4,cursor:'default'}} aria-hidden="true"><Bookmark size={16}/></span>
         </aside>
 
-        <article className="ba-content" dangerouslySetInnerHTML={{ __html: article.content ?? '' }}/>
+        <article className="ba-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content ?? '') }}/>
       </div>
 
       {/* Relacionados */}
@@ -1053,8 +1103,8 @@ function NoticesPage() { return <Shell><PageContent><PageHero eyebrow="COMUNIDAD
 function InterviewWatchPage() {
   const { slug } = useParams()
   const { user } = useAuth()
-  const { interviews } = useInterviews()
-  const current = interviews.find(iv => iv.slug === slug) ?? interviews[0]
+  const { interviews, loading: interviewsLoading } = useInterviews()
+  const current = interviews.find(iv => iv.slug === slug) ?? null
   const related = interviews.filter(iv => iv.slug !== current?.slug)
 
   const [watched, setWatched] = useState(false)
@@ -1070,7 +1120,8 @@ function InterviewWatchPage() {
     return () => { active = false }
   }, [user, current?.slug])
 
-  if (!current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar entrevistaâ€¦</span></div></WatchShell>
+  if (interviewsLoading && !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar entrevista…</span></div></WatchShell>
+  if (!current) return <NotFound />
 
   const embedUrl = current.videoId ? `https://www.youtube-nocookie.com/embed/${current.videoId}?rel=0&controls=1&playsinline=1` : null
 
@@ -1150,7 +1201,7 @@ function ZoomWatchPage() {
   const { id } = useParams()
   const { user } = useAuth()
   const { recordings, loading } = useZoomRecordings()
-  const current = recordings.find(r => r.id === id) ?? (loading ? null : recordings[0])
+  const current = recordings.find(r => r.id === id) ?? null
   const related = recordings.filter(r => r.id !== current?.id)
   const [watched, setWatched] = useState(false)
 
@@ -1162,7 +1213,8 @@ function ZoomWatchPage() {
     return () => { active = false }
   }, [user, current?.id])
 
-  if (loading || !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar gravação…</span></div></WatchShell>
+  if (loading && !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar gravação…</span></div></WatchShell>
+  if (!current) return <NotFound />
 
   const embedUrl = current.videoUrl ? getYouTubeEmbedUrl(current.videoUrl) : null
 
@@ -1237,7 +1289,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
   if (user) return <Navigate to="/" replace />
   const submit = async (event: FormEvent) => { event.preventDefault(); setError(''); setLoading(true); const message = await signIn(identifier, password); setLoading(false); if (message) setError(message); else navigate('/') }
-  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADÊMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail ou usuário</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="text" autoComplete="username" placeholder="ericeenio ou nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrarâ€¦</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
+  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADÊMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail ou usuário</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="text" autoComplete="username" placeholder="ericeenio ou nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
 }
 
 function NotFound() { return <Shell><PageContent><div className="not-found"><span className="eyebrow">404 · PÁGINA NÃO ENCONTRADA</span><h1>Este caminho ainda<br/>não existe.</h1><ButtonLink to="/">Voltar ao início</ButtonLink></div></PageContent></Shell> }
