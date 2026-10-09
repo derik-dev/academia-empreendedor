@@ -28,14 +28,16 @@ function useNotifications() {
     Promise.all([
       client.from('courses').select('slug,title,category,published_at,cover_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
       client.from('articles').select('slug,title,published_at,image_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
-      client.from('interviews').select('slug,title,published_at,thumb_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
-      client.from('zoom_recordings').select('id,title,published_at,thumb_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
+      client.from('interviews').select('slug,title,published_at,thumb_url,video_id').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
+      client.from('zoom_recordings').select('id,title,published_at,thumb_url,video_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
     ]).then(([courses, articles, interviews, zoom]) => {
+      const ytThumb = (id?: string | null) => id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : undefined
+      const ytId = (url?: string | null) => url?.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)?.[1]
       const all: NotifItem[] = [
         ...(courses.data ?? []).map(c => ({ id: `c-${c.slug}`, title: c.title, type: c.category === 'podcast' ? 'Podcast' : 'Minissérie', link: c.category === 'podcast' ? `/podcasts?podcast=${c.slug}` : `/assistir/${c.slug}`, publishedAt: c.published_at, cover: c.cover_url ?? undefined })),
         ...(articles.data ?? []).map(a => ({ id: `a-${a.slug}`, title: a.title, type: 'Artigo', link: `/blog/${a.slug}`, publishedAt: a.published_at, cover: a.image_url ?? undefined })),
-        ...(interviews.data ?? []).map(i => ({ id: `i-${i.slug}`, title: i.title, type: 'Entrevista', link: `/entrevistas/${i.slug}`, publishedAt: i.published_at, cover: i.thumb_url ?? undefined })),
-        ...(zoom.data ?? []).map(z => ({ id: `z-${z.id}`, title: z.title, type: 'Zoom', link: `/gravacoes-zoom/${z.id}`, publishedAt: z.published_at, cover: z.thumb_url ?? undefined })),
+        ...(interviews.data ?? []).map(i => ({ id: `i-${i.slug}`, title: i.title, type: 'Entrevista', link: `/entrevistas/${i.slug}`, publishedAt: i.published_at, cover: i.thumb_url ?? ytThumb(i.video_id) })),
+        ...(zoom.data ?? []).map(z => ({ id: `z-${z.id}`, title: z.title, type: 'Zoom', link: `/gravacoes-zoom/${z.id}`, publishedAt: z.published_at, cover: z.thumb_url ?? ytThumb(ytId(z.video_url)) })),
       ].filter(i => !!i.publishedAt).sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()).slice(0, 20)
       setItems(all)
     })

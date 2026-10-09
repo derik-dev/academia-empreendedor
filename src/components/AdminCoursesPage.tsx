@@ -12,6 +12,7 @@ import { AdminHeroArtwork } from './AdminHeroArtwork'
 import { AdminSelect, type AdminSelectOption } from './AdminSelect'
 import { getYouTubeVideoId } from '../lib/youtube'
 import { correctText, generateArticle, type GenerateParams } from '../lib/groq'
+import { isReportableSystemError, reportSystemAlert, systemAlertTypeForError } from '../lib/monitoring'
 
 type AdminSection = 'overview' | 'courses' | 'podcasts' | 'interviews' | 'blog' | 'zoom' | 'notices'
 
@@ -102,7 +103,8 @@ type LessonDraft = { id: string; title: string; videoUrl: string; durationSecond
 type ActiveLessonForm = { id: string; title: string; videoUrl: string; durationText: string; coverFile: File | null; coverPreview: string; isNew: boolean }
 type CourseDraft = {
   title: string; description: string; instructor: string; category: Course['category']
-  videoUrl: string; body: string; status: 'draft' | 'published'; coverUrl: string; file: File | null
+  videoUrl: string; body: string; status: 'draft' | 'published' | 'scheduled'; scheduledFor: string
+  coverUrl: string; file: File | null
   notesEnabled: boolean; lessonCount: string; durationText: string; level: Course['level']
   lessons: LessonDraft[]; removedLessonIds: string[]; articleCategory: string; interviewAuthor: string
   zoomType: string; zoomCategory: string
@@ -110,7 +112,7 @@ type CourseDraft = {
 
 const blankDraft: CourseDraft = {
   title: '', description: '', instructor: '', category: 'miniseries', videoUrl: '', body: '',
-  status: 'published', coverUrl: '', file: null, notesEnabled: true, lessonCount: '', durationText: '',
+  status: 'published', scheduledFor: '', coverUrl: '', file: null, notesEnabled: true, lessonCount: '', durationText: '',
   level: null, lessons: [], removedLessonIds: [], articleCategory: 'Mentalidade', interviewAuthor: '',
   zoomType: 'Aula', zoomCategory: '',
 }
@@ -302,13 +304,18 @@ export function AdminCoursesPage() {
     })
     const monthlyVisitResults = await Promise.all(monthRanges.map(({ start, end }) => client.from('course_access_events').select('id', { count: 'exact', head: true }).neq('user_id', userId).gte('accessed_at', start.toISOString()).lt('accessed_at', end.toISOString())))
     const failed = [allStudents.error, newStudents.error, publishedCourses.error, courseRows.error, recentAccessRows.error, ...monthlyVisitResults.map(r => r.error)].find(Boolean)
+    const infrastructureErrors = [allStudents.error, newStudents.error, publishedCourses.error, courseRows.error, recentAccessRows.error, ...monthlyVisitResults.map(r => r.error)].filter(isReportableSystemError)
+    if (infrastructureErrors.length) {
+      const failure = infrastructureErrors[0]!
+      void reportSystemAlert({ type: systemAlertTypeForError(failure), message: failure.message, metadata: { component: 'AdminCoursesPage', operation: 'loadDashboard', code: failure.code }, client: adminSupabase })
+    }
     const visitCounts = monthlyVisitResults.map(result => result.count ?? 0)
     setMonthlyVisits(visitCounts)
     // Busca histórico de alunos por mês de forma não-fatal (pode falhar por RLS sem bloquear o dashboard)
     Promise.all(monthRanges.map(({ start, end }) => client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId).gte('created_at', start.toISOString()).lt('created_at', end.toISOString())))
       .then(results => { if (results.every(r => !r.error)) setMonthlyStudents(results.map(r => r.count ?? 0)) })
       .catch(() => { /* silencioso — sparklines ficam vazios */ })
-    setError(failed ? 'Não foi possível carregar todos os dados. Confira se a migration do painel foi aplicada.' : '')
+    setError(failed ? 'Não foi possível carregar alguns dados agora. Tente novamente em instantes.' : '')
     setStats({ students: allStudents.count ?? 0, newStudents: newStudents.count ?? 0, publishedCourses: publishedCourses.count ?? 0, visitsThisMonth: visitCounts[visitCounts.length - 1] ?? 0 })
     const [interviewRows, articleRows, zoomRows, categoryRows] = await Promise.all([
       client.from('interviews').select('id,slug,title,subtitle,guest,guest_role,author,cover_url,duration,video_id,published_at,status,scheduled_for,created_at').order('created_at', { ascending: false }),
@@ -316,6 +323,10 @@ export function AdminCoursesPage() {
       client.from('zoom_recordings').select('id,title,description,type,category,duration,thumb_url,video_url,recorded_at,status,scheduled_for').order('recorded_at', { ascending: false }),
       client.from('article_categories').select('name,color').order('name'),
     ])
+    for (const [table, result] of [['interviews', interviewRows], ['articles', articleRows], ['zoom_recordings', zoomRows], ['article_categories', categoryRows]] as const) {
+      if (result.error && isReportableSystemError(result.error)) void reportSystemAlert({ type: systemAlertTypeForError(result.error), message: result.error.message, metadata: { component: 'AdminCoursesPage', operation: 'loadDashboard', table, code: result.error.code }, client: adminSupabase })
+    }
+    if ([interviewRows.error, articleRows.error, zoomRows.error, categoryRows.error].some(Boolean)) setError('Não foi possível carregar alguns conteúdos agora. Tente novamente em instantes.')
     if (!categoryRows.error && categoryRows.data) {
       const customCategories = categoryRows.data.map(category => ({ value: category.name, label: category.name, color: category.color }))
       setArticleCategories([...defaultArticleCategories, ...customCategories.filter(category => !defaultArticleCategories.some(defaultCategory => defaultCategory.value.toLocaleLowerCase('pt-BR') === category.value.toLocaleLowerCase('pt-BR')))])
@@ -405,7 +416,8 @@ export function AdminCoursesPage() {
     const { data, error: insertError } = await adminSupabase.from('article_categories').insert({ name, slug, color: newCategoryColor }).select('name,color').single()
     setCategorySaving(false)
     if (insertError || !data) {
-      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível salvar. Confira se a migration de categorias do blog foi aplicada.')
+      if (insertError && isReportableSystemError(insertError)) void reportSystemAlert({ type: systemAlertTypeForError(insertError), message: insertError.message, metadata: { component: 'AdminCoursesPage', operation: 'createCategory', table: 'article_categories', code: insertError.code }, client: adminSupabase })
+      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível salvar a categoria agora. Tente novamente.')
       return
     }
     setArticleCategories(current => [...current, { value: data.name, label: data.name, color: data.color }])
@@ -491,20 +503,6 @@ export function AdminCoursesPage() {
     })
   }
 
-  const errorMessage = (caught: unknown) => {
-    if (caught instanceof Error) return caught.message
-    if (typeof caught === 'string') return caught
-    if (caught && typeof caught === 'object') {
-      const backendError = caught as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
-      if (backendError.code === '23505') return 'Já existe um conteúdo com esse título ou endereço na biblioteca. Altere o título e tente novamente.'
-      const parts = [backendError.message, backendError.details, backendError.hint]
-        .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
-      if (parts.length) return parts.join(' ')
-      if (typeof backendError.code === 'string') return `Erro ${backendError.code} ao salvar o conteúdo.`
-    }
-    return `Não foi possível salvar ${sectionMeta[section]?.item ?? 'o conteúdo'}.`
-  }
-
   const saveCourse = async (event: FormEvent) => {
     event.preventDefault()
     if (!adminSupabase || !user || saving) return
@@ -520,6 +518,8 @@ export function AdminCoursesPage() {
       if (section === 'courses' && draft.status === 'published' && draft.lessons.length === 0) {
         throw new Error('Adicione pelo menos uma aula antes de publicar a minissérie.')
       }
+      if (draft.status === 'scheduled' && !draft.scheduledFor) throw new Error('Informe a data e hora para agendar a publicação.')
+      const scheduledFor = draft.status === 'scheduled' ? new Date(draft.scheduledFor).toISOString() : null
       const finalPublishedAt = (status: Course['status'], existing: Course | undefined) =>
         status === 'published' ? (existing?.published_at ?? new Date().toISOString()) : null
       let coverUrl = draft.coverUrl.trim()
@@ -537,15 +537,15 @@ export function AdminCoursesPage() {
       let savedCourseId: string | null = editingId
       if (section === 'interviews') {
         const videoId = getYouTubeVideoId(draft.videoUrl.trim()) || null
-        const vals = { slug, title: draft.title.trim(), subtitle: draft.description.trim(), guest: draft.instructor.trim(), author: draft.interviewAuthor.trim() || null, cover_url: coverUrl || null, video_id: videoId, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: null }
+        const vals = { slug, title: draft.title.trim(), subtitle: draft.description.trim(), guest: draft.instructor.trim(), author: draft.interviewAuthor.trim() || null, cover_url: coverUrl || null, video_id: videoId, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('interviews').update(vals).eq('id', editingId) : await adminSupabase.from('interviews').insert(vals)
         if (result.error) throw result.error
       } else if (section === 'blog') {
-        const vals = { slug, title: draft.title.trim(), excerpt: draft.description.trim(), category: draft.articleCategory, read_time: draft.durationText.trim() || null, image_url: coverUrl || null, content: draft.body.trim() || null, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: null }
+        const vals = { slug, title: draft.title.trim(), excerpt: draft.description.trim(), category: draft.articleCategory, read_time: draft.durationText.trim() || null, image_url: coverUrl || null, content: draft.body.trim() || null, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('articles').update(vals).eq('id', editingId) : await adminSupabase.from('articles').insert(vals)
         if (result.error) throw result.error
       } else if (section === 'zoom') {
-        const vals = { title: draft.title.trim(), description: draft.description.trim(), type: draft.zoomType, category: draft.zoomCategory.trim(), video_url: draft.videoUrl.trim() || null, thumb_url: coverUrl || null, duration: draft.durationText.trim() || '', status: draft.status, recorded_at: existing?.published_at ?? new Date().toISOString(), scheduled_for: null }
+        const vals = { title: draft.title.trim(), description: draft.description.trim(), type: draft.zoomType, category: draft.zoomCategory.trim(), video_url: draft.videoUrl.trim() || null, thumb_url: coverUrl || null, duration: draft.durationText.trim() || '', status: draft.status, recorded_at: existing?.published_at ?? new Date().toISOString(), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('zoom_recordings').update(vals).eq('id', editingId) : await adminSupabase.from('zoom_recordings').insert(vals)
         if (result.error) throw result.error
       } else {
@@ -565,7 +565,7 @@ export function AdminCoursesPage() {
         status: draft.status,
         created_by: user.id,
         published_at: finalPublishedAt(draft.status, existing),
-        scheduled_for: null,
+        scheduled_for: scheduledFor,
         updated_at: new Date().toISOString(),
       }
       if (editingId) {
@@ -601,8 +601,9 @@ export function AdminCoursesPage() {
       setNotice(successMsg)
       await loadDashboard()
     } catch (caught) {
-      console.error('Falha ao salvar conteúdo no painel administrativo:', caught)
-      setError(errorMessage(caught))
+      if (import.meta.env.DEV) console.error('Falha ao salvar conteúdo no painel administrativo.', caught)
+      if (isReportableSystemError(caught)) void reportSystemAlert({ type: systemAlertTypeForError(caught), message: caught instanceof Error ? caught.message : 'Falha ao salvar conteúdo', metadata: { component: 'AdminCoursesPage', operation: 'saveContent' }, client: adminSupabase })
+      setError('Não foi possível salvar o conteúdo agora. Verifique os dados e tente novamente.')
     } finally { setSaving(false) }
   }
 
@@ -611,16 +612,18 @@ export function AdminCoursesPage() {
     let loadedLessons: LessonDraft[] = []
     let articleBody = ''
     if (adminSupabase && (course.category === 'course' || course.category === 'miniseries')) {
-      const { data } = await adminSupabase.from('lessons').select('id,title,video_url,duration_seconds,position,cover_url').eq('course_id', course.id).order('position')
+      const { data, error: lessonsError } = await adminSupabase.from('lessons').select('id,title,video_url,duration_seconds,position,cover_url').eq('course_id', course.id).order('position')
+      if (lessonsError && isReportableSystemError(lessonsError)) void reportSystemAlert({ type: systemAlertTypeForError(lessonsError), message: lessonsError.message, metadata: { component: 'AdminCoursesPage', operation: 'editCourse', table: 'lessons', code: lessonsError.code }, client: adminSupabase })
       loadedLessons = ((data ?? []) as LessonRow[]).map(l => ({ id: l.id, title: l.title, videoUrl: l.video_url, durationSeconds: l.duration_seconds, position: l.position, coverUrl: l.cover_url ?? '' }))
     }
     let articleCategory = 'Mentalidade'
     if (adminSupabase && course.category === 'blog') {
-      const { data } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
+      const { data, error: articleError } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
+      if (articleError && isReportableSystemError(articleError)) void reportSystemAlert({ type: systemAlertTypeForError(articleError), message: articleError.message, metadata: { component: 'AdminCoursesPage', operation: 'editArticle', table: 'articles', code: articleError.code }, client: adminSupabase })
       articleBody = data?.content ?? ''
       articleCategory = data?.category ?? 'Mentalidade'
     }
-    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status === 'published' ? 'published' : 'draft', coverUrl: course.cover_url, file: null, notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
+    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', coverUrl: course.cover_url, file: null, notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
     setPreviewUrl(img(course.cover_url))
     setActiveLessonForm(null)
     setLessonFormError('')
@@ -633,7 +636,10 @@ export function AdminCoursesPage() {
     const tableBySection: Partial<Record<AdminSection, string>> = { interviews: 'interviews', blog: 'articles', zoom: 'zoom_recordings' }
     const table = tableBySection[section] ?? 'courses'
     const { error: deleteError } = await adminSupabase.from(table).delete().eq('id', course.id)
-    if (deleteError) setError('Não foi possível excluir o conteúdo.')
+    if (deleteError) {
+      if (isReportableSystemError(deleteError)) void reportSystemAlert({ type: systemAlertTypeForError(deleteError), message: deleteError.message, metadata: { component: 'AdminCoursesPage', operation: 'delete', table, code: deleteError.code }, client: adminSupabase })
+      setError('Não foi possível excluir o conteúdo.')
+    }
     else { setNotice(`${course.title} foi excluído.`); await loadDashboard() }
   }
 
@@ -932,10 +938,16 @@ export function AdminCoursesPage() {
           <div className="admin-form-bottom-bar">
             <div className="admin-form-bottom-estado">
               <span>Estado</span>
-              <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'] }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'published', label: 'Publicar agora' }]}/>
+              <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'], scheduledFor: value !== 'scheduled' ? '' : c.scheduledFor }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
+              {draft.status === 'scheduled' && (
+                <div className="admin-input-icon-wrap" style={{marginTop: 8}}>
+                  <CalendarDays size={14}/>
+                  <input type="datetime-local" className="admin-input-has-icon admin-schedule-input" value={draft.scheduledFor} min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>
+                </div>
+              )}
             </div>
             <button className="button admin-save-btn-new" type="submit" disabled={saving}>
-              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
+              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
             </button>
           </div>
         </div>
