@@ -1,40 +1,44 @@
 # Academia do Empreendedor
 
-Plataforma privada de conteúdos construída com React, Vite e TypeScript. O Supabase Auth gere as contas e sessões. Neste momento, qualquer conta autenticada pode entrar; o login não consulta compras nem a Hotmart.
+Aplicação de conteúdos feita com React, TypeScript e Vite, com autenticação, banco de dados e armazenamento no Supabase.
 
-## Começar
+## Desenvolvimento local
 
-1. Instale as dependências com `npm install`.
-2. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` (ou a publishable key do projeto).
-3. No Supabase, confirme que o Email/Password está ativo e que as contas necessárias existem em Authentication → Users.
-4. Aplique, nesta ordem, `supabase/migrations/202609300001_initial_content_schema.sql` e `supabase/migrations/202610010001_course_notes.sql` no SQL Editor. A segunda cria o banco de notas privadas por utilizador e curso.
-5. Aplique também `supabase/migrations/202610020001_admin_course_dashboard.sql` no SQL Editor.
-6. Execute `npm run dev`.
+1. Instale as dependências: `npm install`.
+2. Copie `.env.example` para `.env` e preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores públicos do projeto Supabase. A chave anon/publishable é destinada ao cliente e não concede privilégios administrativos por si só.
+3. Inicie a aplicação com `npm run dev`.
 
-Use apenas a chave pública anon/publishable no frontend. Nunca coloque `service_role` em variáveis `VITE_*`.
-## Painel administrativo
+Nunca use chaves secretas, `service_role` ou `OPENAI_API_KEY` em variáveis `VITE_*`. O segredo da OpenAI pertence apenas ao ambiente da Edge Function. Para desenvolvimento local, configure `OPENAI_API_KEY` em `supabase/functions/.env`; no projeto remoto, use os secrets das Edge Functions. O proxy exige sessão administrativa.
 
-A rota `/admin` exige uma conta com acesso concedido na tabela `public.admin_users`. O login aceita `ericeenio` (associado a `ericeenio@gmail.com`) ou o e-mail. Ao criar esse usuário no Supabase Auth, a migration concede o papel administrativo automaticamente. Se a conta já existir quando a migration for aplicada, ela também será promovida. Cadastre ou redefina a senha diretamente no Supabase Auth; ela não fica guardada no frontend.
+## Endereços e publicação
 
-```sql
-insert into public.admin_users (user_id)
-select id from auth.users where lower(email) = 'ericeenio@gmail.com'
-on conflict (user_id) do nothing;
-```
+A aplicação está configurada para ser publicada sob `/plataforma/`. O `base` do Vite, o `basename` do React Router e o fallback do Apache seguem esse prefixo. Publique os arquivos de `dist/` no diretório web correspondente a `/plataforma/`. A página de vendas em `/academia` é independente e não deve ser sobrescrita por esse bundle.
 
-O nome de utilizador `ericeenio` precisa estar associado a um e-mail do Supabase Auth. A senha deve ser cadastrada no próprio Supabase, nunca no código do frontend.
+## Banco de dados e migrations
+
+As migrations versionadas estão em `supabase/migrations/`. O histórico remoto diverge dos nomes e versões locais e contém alterações sem correspondência local clara. **Não aplique a pasta inteira em produção nem marque migrations como executadas antes de reconciliar o schema.** Consulte [`docs/SUPABASE_MIGRATION_RECONCILIATION.md`](docs/SUPABASE_MIGRATION_RECONCILIATION.md), que registra as divergências observadas e um procedimento seguro. Nenhuma migration remota deve ser aplicada sem backup e comparação do schema.
+
+As migrations existentes incluem schema e dados de exemplo. Confirme quais dados são legítimos antes de uma publicação real. Há registros de teste já publicados no banco; não foram alterados durante esta revisão.
 
 ## Scripts
 
-- `npm run dev` — servidor local.
-- `npm run lint` — ESLint.
-- `npx tsc --noEmit` — verificação TypeScript.
-- `npm run build` — build de produção.
+- `npm run dev` — servidor local Vite.
+- `npm run lint` — análise ESLint.
+- `npm run build` — verificação TypeScript e bundle de produção.
+- `npm run preview` — pré-visualização local do bundle.
 
-## Conteúdo pendente
+## Administração e segurança
 
-O banner principal e a tela de login usam imagens locais criadas para representar as cenas do briefing. A logo do Empreendedor Sem Dor está em `public/images/logo.webp` e é aplicada no banner. As capas dos cursos também são assets locais. Fotos oficiais dos fundadores, links dos conteúdos, link do WhatsApp, regras finais de acesso e configuração das entrevistas ainda aguardam confirmação. Os dados de conteúdo ficam em `src/data/content.ts`.
+O painel administrativo usa uma sessão Supabase separada e exige que o usuário esteja cadastrado em `public.admin_users`. O helper `public.is_academy_admin()` é usado para autorizar operações administrativas. O proxy de IA também valida a sessão e esse papel no servidor, limita tamanho e frequência de solicitações, e fixa modelo e limite de saída.
 
-## Hotmart — integração futura
+Configuração local do gateway: `supabase/config.toml` exige JWT válido em `openai-proxy`. Essa configuração e o código alterado neste repositório ainda precisam ser publicados na Edge Function para afetar o projeto remoto. O código usa `SUPABASE_URL`, `SUPABASE_ANON_KEY` (ou `SUPABASE_PUBLISHABLE_KEY`) e `OPENAI_API_KEY` no ambiente da função; não usa a chave de serviço.
 
-Quando a regra comercial estiver confirmada, a integração entra numa Edge Function ou endpoint backend autenticado que valida a assinatura do webhook oficial da Hotmart, correlaciona o comprador com a conta Supabase e regista a concessão/revogação de acesso. O segredo e credenciais ficam apenas no backend. O frontend continua a usar Supabase Auth; uma futura verificação de entitlement pode ser feita pelo backend/RLS após definição da duração e natureza do acesso. Não há webhook, URL ou segredo fictício implementado. Valor informado no briefing: 177 €.
+O limite de frequência do proxy é aplicado por instância da função; ele ajuda a limitar abuso, mas não substitui rate limiting compartilhado para limites globais de custo.
+
+## Pendências antes da publicação
+
+Confirme com a equipe se os registros publicados `Teste`, `Teste podcast` e `Teste Entrevista` devem ser removidos. O banco também tem somente uma aula na tabela `lessons`, vinculada ao curso de teste. Esta revisão não alterou nem apagou conteúdo. O fluxo de agendamento segue desabilitado até a reconciliação do banco documentada acima.
+
+## Verificação
+
+Execute `npm run lint` e `npm run build` antes de enviar alterações. Não há runner de testes automatizados configurado. Confira manualmente as rotas administrativas e a implantação sob `/plataforma/`.

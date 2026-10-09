@@ -1,27 +1,17 @@
-const OPENAI_PROXY_URL = `${(import.meta.env as Record<string, string>).VITE_SUPABASE_URL.replace('/rest/v1/', '')}/functions/v1/openai-proxy`
-const OPENAI_MODEL = 'gpt-4o-mini'
+import { adminSupabase } from './supabase'
 
 async function callAI(
   messages: { role: 'system' | 'user'; content: string }[],
   jsonMode = false,
 ): Promise<string> {
-  const res = await fetch(OPENAI_PROXY_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages,
-      temperature: 0.7,
-      max_tokens: 4096,
-      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-    }),
+  if (!adminSupabase) throw new Error('O painel administrativo não está configurado.')
+  const { data, error } = await adminSupabase.functions.invoke('openai-proxy', {
+    body: { messages, jsonMode },
   })
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({})) as { error?: { message?: string } }
-    throw new Error(body.error?.message ?? `OpenAI API error ${res.status}`)
-  }
-  const data = await res.json() as { choices: { message: { content: string } }[] }
-  return data.choices[0]?.message?.content ?? ''
+  if (error) throw new Error(error.message || 'Não foi possível acessar o serviço de IA.')
+  const result = data as { choices?: { message?: { content?: string } }[]; error?: { message?: string } } | null
+  if (result?.error?.message) throw new Error(result.error.message)
+  return result?.choices?.[0]?.message?.content ?? ''
 }
 
 export async function correctText(text: string): Promise<string> {

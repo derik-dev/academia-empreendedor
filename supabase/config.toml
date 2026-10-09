@@ -1,0 +1,2 @@
+[functions.openai-proxy]
+verify_jwt = true
