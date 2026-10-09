@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowRight, Bell, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Play } from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { areas, courseVideoUrls, type ContentArea } from '../data/content'
@@ -11,7 +11,8 @@ import { useInterviews } from '../data/useInterviews'
 import type { Interview } from '../types/interview'
 import { useArticles } from '../data/useArticles'
 import { supabase } from '../lib/supabase'
-import { SearchHeader, Sidebar } from './Chrome'
+import { isReportableSystemError, reportSystemAlert, systemAlertTypeForError } from '../lib/monitoring'
+import { NotificationBell, SearchHeader, Sidebar } from './Chrome'
 
 type Progress = {
   courseSlug: string
@@ -153,12 +154,17 @@ export function DashboardHome() {
       .select('course_slug,lesson_id,progress_percent,completed,current_time_seconds,duration_seconds,last_watched_at')
       .eq('user_id', user.id)
       .order('last_watched_at', { ascending: false })
-      .then(async ({ data }) => {
+      .then(async ({ data, error }) => {
+        if (error) {
+          if (isReportableSystemError(error)) void reportSystemAlert({ type: systemAlertTypeForError(error), message: error.message, metadata: { component: 'DashboardHome', operation: 'select', table: 'lesson_progress', code: error.code } })
+          return
+        }
         if (!active || !data) return
         const lessonIds = [...new Set(data.map(row => String(row.lesson_id ?? '')).filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))]
         const lessonTitles = new Map<string, { title: string; position: number }>()
         if (lessonIds.length) {
-          const { data: lessonRows } = await client.from('lessons').select('id,title,position').in('id', lessonIds)
+          const { data: lessonRows, error: lessonsError } = await client.from('lessons').select('id,title,position').in('id', lessonIds)
+          if (lessonsError && isReportableSystemError(lessonsError)) void reportSystemAlert({ type: systemAlertTypeForError(lessonsError), message: lessonsError.message, metadata: { component: 'DashboardHome', operation: 'select', table: 'lessons', code: lessonsError.code } })
           for (const lesson of lessonRows ?? []) lessonTitles.set(lesson.id, { title: lesson.title, position: lesson.position })
         }
         if (!active) return
@@ -177,6 +183,8 @@ export function DashboardHome() {
           }
         }
         setProgress(next)
+      }).catch(error => {
+        if (isReportableSystemError(error)) void reportSystemAlert({ type: 'database_error', message: error instanceof Error ? error.message : 'Falha ao carregar progresso', metadata: { component: 'DashboardHome', operation: 'loadProgress' } })
       })
     return () => { active = false }
   }, [user])
@@ -211,7 +219,7 @@ export function DashboardHome() {
           <div className="home-welcome-copy"><h1>Olá, {displayName}</h1><p>Continue sua jornada de aprendizagem.</p></div>
           <div className="home-search-bar"><SearchHeader /></div>
           <div className="home-welcome-actions">
-            <span className="topbar-notification"><Bell size={21}/><i/></span>
+            <NotificationBell/>
             <Link className="topbar-account" to="/perfil"><span className="avatar">{displayName[0]?.toUpperCase()}</span><strong>{displayName}</strong><ChevronDown size={16}/></Link>
           </div>
         </section>
