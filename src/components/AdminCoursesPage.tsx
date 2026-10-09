@@ -942,7 +942,7 @@ export function AdminCoursesPage() {
               {draft.status === 'scheduled' && (
                 <div className="admin-input-icon-wrap" style={{marginTop: 8}}>
                   <CalendarDays size={14}/>
-                  <input type="datetime-local" className="admin-input-has-icon admin-schedule-input" value={draft.scheduledFor} min={new Date(Date.now() + 60000).toISOString().slice(0, 16)} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>
+                  <input type="datetime-local" className="admin-input-has-icon admin-schedule-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>
                 </div>
               )}
             </div>
