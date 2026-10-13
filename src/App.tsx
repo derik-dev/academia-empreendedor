@@ -23,6 +23,7 @@ import { cardCover } from './lib/cardCover'
 import { getProfessorPhoto } from './lib/adminAuthors'
 import { sanitizeHtml } from './lib/sanitizeHtml'
 import { normalizeSearch } from './lib/normalizeSearch'
+import { resolveAudioSource } from './lib/audioSource'
 
 let _ytApiPromise: Promise<YouTubeIframeApi> | null = null
 function loadYT(): Promise<YouTubeIframeApi> {
@@ -436,10 +437,20 @@ function PodcastsPage() {
   }
   const togglePodcast = async (podcast: ContentArea) => {
     if (activePlayer?.slug === podcast.slug) { setIsPlaying(current => !current); openPodcast(podcast); return }
-    if (podcast.audioPath && supabase) {
+    let source: ReturnType<typeof resolveAudioSource> = null
+    try { source = resolveAudioSource(podcast.audioPath) } catch { /* caminho inválido; cai no fallback */ }
+    if (source?.kind === 'host') {
+      if (source.url) {
+        setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: source.url, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
+        setIsPlaying(true)
+        openPodcast(podcast)
+        return
+      }
+      // url vazia significa VITE_MEDIA_BASE_URL não configurada; cai no fallback de YouTube
+    } else if (source?.kind === 'supabase' && supabase) {
       setPlayerLoading(podcast.slug)
       try {
-        const { data } = await supabase.storage.from('podcast-audio').createSignedUrl(podcast.audioPath, 3600)
+        const { data } = await supabase.storage.from('podcast-audio').createSignedUrl(source.path, 3600)
         if (data?.signedUrl) {
           setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: data.signedUrl, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
           setIsPlaying(true)

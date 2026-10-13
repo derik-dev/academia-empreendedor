@@ -6,3 +6,4 @@ server/hostinger/api-academia/config.php
 *.tsbuildinfo
 supabase/.temp/
 supabase/functions/.env
+.claude/settings.local.json

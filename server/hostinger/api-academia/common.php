@@ -20,7 +20,7 @@ function loadConfig(): array
     }
 
     $config = require $configPath;
-    $required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ALLOWED_ORIGINS', 'MAX_BYTES', 'MEDIA_DIR', 'MEDIA_BASE_URL'];
+    $required = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ALLOWED_ORIGINS', 'MAX_BYTES', 'MEDIA_BASE_URL'];
     foreach ($required as $key) {
         if (!array_key_exists($key, $config)) {
             error_log('[academia-audio] Configuração incompleta.');
@@ -28,9 +28,19 @@ function loadConfig(): array
         }
     }
 
-    if (!is_array($config['ALLOWED_ORIGINS']) || !is_string($config['MEDIA_DIR']) || !is_string($config['MEDIA_BASE_URL'])) {
+    if (!is_array($config['ALLOWED_ORIGINS']) || !is_string($config['MEDIA_BASE_URL'])) {
         error_log('[academia-audio] Formato de configuração inválido.');
         respond(500, ['error' => 'O serviço de áudio ainda não está configurado.']);
+    }
+
+    // MEDIA_DIR é opcional: se ausente ou vazio, deriva a partir da pasta irmã media-academia.
+    if (!array_key_exists('MEDIA_DIR', $config) || !is_string($config['MEDIA_DIR']) || trim($config['MEDIA_DIR']) === '') {
+        $derived = realpath(__DIR__ . '/../media-academia');
+        if ($derived === false) {
+            error_log('[academia-audio] Pasta media-academia não encontrada e MEDIA_DIR não está configurada.');
+            respond(500, ['error' => 'O serviço de áudio ainda não está configurado.']);
+        }
+        $config['MEDIA_DIR'] = $derived;
     }
 
     return $config;

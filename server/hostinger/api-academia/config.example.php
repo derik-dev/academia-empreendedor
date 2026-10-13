@@ -8,6 +8,8 @@ return [
         'https://netpubli.com.br',
     ],
     'MAX_BYTES' => 157286400,
-    'MEDIA_DIR' => '/home/UTILIZADOR/domains/netpubli.com.br/public_html/media-academia',
+    // 'MEDIA_DIR' => '/home/UTILIZADOR/domains/netpubli.com.br/public_html/media-academia',
+    // Opcional: se omitido ou vazio, o endpoint usa realpath(__DIR__ . '/../media-academia').
+    // Preencha apenas se a pasta media-academia estiver noutro caminho.
     'MEDIA_BASE_URL' => 'https://netpubli.com.br/media-academia/',
 ];
