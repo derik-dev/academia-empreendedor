@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo, type FormEvent } from 'react'
+import type { YouTubeIframeApi, YouTubePlayerInstance, YouTubeReadyEvent, YouTubePlayerEvent } from './types/youtube'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Plus, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
 import { useAuth } from './auth/useAuth'
 import { useAdminAuth } from './auth/useAdminAuth'
 import { AdminAuthProvider } from './auth/AdminAuthProvider'
@@ -22,19 +23,31 @@ import { cardCover } from './lib/cardCover'
 import { getProfessorPhoto } from './lib/adminAuthors'
 import { sanitizeHtml } from './lib/sanitizeHtml'
 
-let _ytApiPromise: Promise<any> | null = null
-function loadYT(): Promise<any> {
-  if ((window as any).YT?.Player) return Promise.resolve((window as any).YT)
+let _ytApiPromise: Promise<YouTubeIframeApi> | null = null
+function loadYT(): Promise<YouTubeIframeApi> {
+  const YT = window.YT
+  if (YT?.Player) return Promise.resolve(YT)
   if (_ytApiPromise) return _ytApiPromise
-  _ytApiPromise = new Promise<any>((resolve, reject) => {
+  _ytApiPromise = new Promise<YouTubeIframeApi>((resolve, reject) => {
     let settled = false
-    const done = (v: any) => { if (settled) return; settled = true; v instanceof Error ? reject(v) : resolve(v) }
-    const prev = (window as any).onYouTubeIframeAPIReady
-    ;(window as any).onYouTubeIframeAPIReady = () => { prev?.(); (window as any).YT?.Player ? done((window as any).YT) : done(new Error('YT unavailable')) }
+    const done = (v: YouTubeIframeApi | Error) => {
+      if (settled) return
+      settled = true
+      if (v instanceof Error) reject(v)
+      else resolve(v)
+    }
+    const prev = window.onYouTubeIframeAPIReady
+    window.onYouTubeIframeAPIReady = () => {
+      prev?.()
+      const yt = window.YT
+      if (yt?.Player) done(yt)
+      else done(new Error('YT unavailable'))
+    }
     if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
       const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api'; s.async = true; document.head.appendChild(s)
     }
-    if ((window as any).YT?.Player) done((window as any).YT)
+    const yt = window.YT
+    if (yt?.Player) done(yt)
   }).catch(e => { _ytApiPromise = null; throw e })
   return _ytApiPromise
 }
@@ -190,7 +203,7 @@ function formatPodcastTime(s: number) {
 
 function PodcastAudioPlayer({ videoId, title, author, image, playing, onPlayingChange, onClose }: { videoId: string; title: string; author: string; image?: string; playing: boolean; onPlayingChange: (playing: boolean) => void; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const playerRef = useRef<any>(null)
+  const playerRef = useRef<YouTubePlayerInstance | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
   const playingRef = useRef(playing)
   const [currentTime, setCurrentTime] = useState(0)
@@ -205,14 +218,14 @@ function PodcastAudioPlayer({ videoId, title, author, image, playing, onPlayingC
         videoId,
         playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
         events: {
-          onReady: (e: any) => {
+          onReady: (e: YouTubeReadyEvent) => {
             if (!active) return
             const dur = e.target.getDuration()
             if (dur > 0) setDuration(dur)
             e.target.setVolume(80)
             if (playingRef.current) e.target.playVideo()
           },
-          onStateChange: (e: any) => {
+          onStateChange: (e: YouTubePlayerEvent) => {
             if (!active) return
             if (e.data === 1) onPlayingChange(true)
             else if (e.data === 0 || e.data === 2) onPlayingChange(false)
@@ -244,7 +257,7 @@ function PodcastAudioPlayer({ videoId, title, author, image, playing, onPlayingC
     else if (!playing && state !== 2 && state !== 0) player.pauseVideo()
   }, [playing])
 
-  const toggle = () => { playing ? playerRef.current?.pauseVideo() : playerRef.current?.playVideo() }
+  const toggle = () => { if (playing) playerRef.current?.pauseVideo(); else playerRef.current?.playVideo() }
   const seek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); playerRef.current?.seekTo(t, true); setCurrentTime(t) }
   const changeVolume = (e: React.ChangeEvent<HTMLInputElement>) => { const v = Number(e.target.value); setVolume(v); playerRef.current?.setVolume(v) }
   const skip = (s: number) => { const t = Math.max(0, currentTime + s); playerRef.current?.seekTo(t, true); setCurrentTime(t) }
@@ -317,7 +330,7 @@ function NativePodcastPlayer({ signedUrl, title, author, image, playing, onPlayi
     else if (!playing && !audio.paused) audio.pause()
   }, [playing])
 
-  const toggle = () => { const a = audioRef.current; if (!a) return; playing ? a.pause() : a.play().catch(() => {}) }
+  const toggle = () => { const a = audioRef.current; if (!a) return; if (playing) a.pause(); else { a.play().catch(() => {}) } }
   const seek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t) } }
   const changeVolume = (e: React.ChangeEvent<HTMLInputElement>) => { const v = Number(e.target.value); setVolume(v); if (audioRef.current) audioRef.current.volume = v / 100 }
   const skip = (s: number) => { const a = audioRef.current; if (!a) return; const t = Math.max(0, Math.min(duration, currentTime + s)); a.currentTime = t; setCurrentTime(t) }
@@ -408,6 +421,7 @@ function PodcastsPage() {
 
   useEffect(() => { loadYT().catch(() => {}) }, [])
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selectedPodcastSlug) { setDetailItem(null); return }
     const selected = items.find(item => item.slug === selectedPodcastSlug)
     if (selected) setDetailItem(selected)
@@ -494,9 +508,7 @@ function PodcastsPage() {
               <div className="podcast-meta"><span>Em breve</span></div>
             </div>
             <div className="podcast-actions" onClick={e => e.stopPropagation()}>
-              <button type="button" className="podcast-add" aria-label="Adicionar"><Plus size={22}/></button>
               <button type="button" className="podcast-play" aria-label={activePlayer?.slug === item.slug && isPlaying ? `Pausar ${item.title}` : `Reproduzir ${item.title}`} onClick={() => void togglePodcast(item)}>{playerLoading === item.slug ? <LoaderCircle size={20} className="podcast-play-spinner"/> : activePlayer?.slug === item.slug && isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}</button>
-              <button type="button" className="podcast-more" aria-label="Mais opções"><MoreVertical size={20}/></button>
             </div>
           </article>
         ))}
@@ -519,6 +531,7 @@ function CourseNotes({ slug }: { slug: string }) {
 
   useEffect(() => {
     let active = true
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setMessage('')
     if (!supabase || !user) { setLoading(false); return () => { active = false } }
@@ -541,9 +554,9 @@ function CourseNotes({ slug }: { slug: string }) {
   }
 
   return <section className="watch-notes" aria-labelledby="watch-notes-heading">
-    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notasâ€¦' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
+    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notas…' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
     <textarea id="course-notes" aria-label="Anotações deste curso" value={notes} onChange={e => { setNotes(e.target.value); setMessage('') }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void saveNotes() } }} placeholder="Anote ideias, aprendizados e próximos passos deste curso..." disabled={loading}/>
-    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvandoâ€¦' : 'Salvar nota'}</button></div>
+    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvando…' : 'Salvar nota'}</button></div>
   </section>
 }
 
@@ -568,6 +581,7 @@ function WatchPage() {
   useEffect(() => {
     if (item?.category === 'Podcasts') return
     if (supabase && userId && item?.slug) void supabase.from('course_access_events').insert({ user_id: userId, course_slug: item.slug })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, item?.slug])
 
   useEffect(() => {
@@ -588,6 +602,7 @@ function WatchPage() {
     }
     void loadLessons()
     return () => { active = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item?.slug])
 
   if (!item && coursesLoading) return <WatchShell><div className="watch-loading"><LoaderCircle size={28} className="watch-loading-icon"/></div></WatchShell>
@@ -700,9 +715,9 @@ function InterviewsPage() {
   const interviews = [...allInterviews]
     .filter(iv => filter === 'Todos' || iv.subtitle?.toLowerCase().includes(filter.toLowerCase()))
     .filter(iv => {
-      const q = search.toLowerCase().trim()
+      const q = normalizeSearch(search)
       if (!q) return true
-      return iv.title.toLowerCase().includes(q) || iv.guest.toLowerCase().includes(q) || iv.subtitle?.toLowerCase().includes(q)
+      return normalizeSearch(iv.title).includes(q) || normalizeSearch(iv.guest).includes(q) || normalizeSearch(iv.subtitle ?? '').includes(q)
     })
     .sort((a, b) => {
       if (sortBy === 'antigos') return allInterviews.indexOf(b) - allInterviews.indexOf(a)
@@ -830,8 +845,8 @@ function ZoomPage() {
 
   const filtered = recordings.filter(r => {
     const matchType = filter === 'Todos' || r.type + 's' === filter || r.category === filter || r.type === filter
-    const q = search.toLowerCase().trim()
-    const matchSearch = !q || r.title.toLowerCase().includes(q) || r.description.toLowerCase().includes(q)
+    const q = normalizeSearch(search)
+    const matchSearch = !q || normalizeSearch(r.title).includes(q) || normalizeSearch(r.description).includes(q)
     return matchType && matchSearch
   })
 
@@ -1020,7 +1035,7 @@ function BlogPage() {
       <div className="iv-search blog-search"><Search size={15}/><input type="text" placeholder="Pesquisar artigos..." value={search} onChange={e => setSearch(e.target.value)}/></div>
     </div>
 
-    {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigosâ€¦</div>}
+    {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigos…</div>}
     {!loading && !featured && <div style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a',fontSize:15}}>Nenhum artigo encontrado.</div>}
     {!loading && featured && <div className="blog-grid">
       <Link to={`/blog/${featured.slug}`} className="blog-card blog-card--featured">
@@ -1128,7 +1143,7 @@ function BlogArticlePage() {
   if (loading) return (
     <div className="app-shell app-shell--home"><Sidebar/>
       <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page">
-        <div className="screen-loader" style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigoâ€¦</div>
+        <div className="screen-loader" style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigo…</div>
       </main></div>
     </div>
   )
@@ -1226,9 +1241,10 @@ function InterviewWatchPage() {
     supabase.from('lesson_progress').select('completed').eq('user_id', user.id).eq('course_slug', current.slug).maybeSingle()
       .then(({ data }) => { if (active && data?.completed) setWatched(true) })
     return () => { active = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, current?.slug])
 
-  if (!current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar entrevistaâ€¦</span></div></WatchShell>
+  if (!current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar entrevista…</span></div></WatchShell>
 
   const embedUrl = current.videoId ? `https://www.youtube-nocookie.com/embed/${current.videoId}?rel=0&controls=1&playsinline=1` : null
 
@@ -1320,6 +1336,7 @@ function ZoomWatchPage() {
     supabase.from('lesson_progress').select('completed').eq('user_id', user.id).eq('course_slug', 'zoom-' + current.id).maybeSingle()
       .then(({ data }) => { if (active && data?.completed) setWatched(true) })
     return () => { active = false }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, current?.id])
 
   if (loading || !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar gravação…</span></div></WatchShell>
@@ -1397,7 +1414,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
   if (user) return <Navigate to="/" replace />
   const submit = async (event: FormEvent) => { event.preventDefault(); setError(''); setLoading(true); const message = await signIn(identifier, password); setLoading(false); if (message) setError(message); else navigate('/') }
-  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADÊMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail ou usuário</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="text" autoComplete="username" placeholder="ericeenio ou nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrarâ€¦</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
+  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADEMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="email" autoComplete="email" placeholder="nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
 }
 
 function NotFound() { return <Shell><PageContent><div className="not-found"><span className="eyebrow">404 · PÁGINA NÃO ENCONTRADA</span><h1>Este caminho ainda<br/>não existe.</h1><ButtonLink to="/">Voltar ao início</ButtonLink></div></PageContent></Shell> }
