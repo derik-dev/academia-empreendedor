@@ -1,0 +1,5 @@
+[functions.openai-proxy]
+verify_jwt = true
+
+[functions.admin-students]
+verify_jwt = true
