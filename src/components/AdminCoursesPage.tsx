@@ -116,8 +116,7 @@ export type Course = {
   interview_author?: string
   created_at: string
 }
-type PendingAudioConfirmation = { kind: 'remove'; path: string } | { kind: 'replace'; path: string; file: File }
-type DeleteCourseConfirmation = { id: string; title: string; audioPath: string | null; deleteAudio: boolean }
+type DeleteCourseConfirmation = { id: string; title: string; audioPath: string | null }
 type CourseAccess = { id: string; user_id: string; course_slug: string; accessed_at: string }
 type LessonRow = { id: string; course_id: string; title: string; video_url: string; duration_seconds: number; position: number; cover_url: string | null }
 type StudentRow = { id: string; name: string; email: string; created_at: string }
@@ -161,12 +160,12 @@ function uploadAudioWithProgress(
     xhr.onload = () => {
       if (xhr.status === 401) { reject(new Error('A sessão expirou. Inicie sessão novamente.')); return }
       if (xhr.status === 403) { reject(new Error('Esta conta não tem permissão de administrador.')); return }
-      if (xhr.status === 413) { reject(new Error('O ficheiro excede o limite do servidor. Tente um MP3 com menos de 150 MB.')); return }
+      if (xhr.status === 413) { reject(new Error('O arquivo é grande demais. Envie um MP3 com menos de 150 MB.')); return }
       if (xhr.status === 415) { reject(new Error('Envie apenas ficheiros MP3. Converta o WAV para MP3 antes de enviar.')); return }
 
       let body: unknown
       try { body = JSON.parse(xhr.responseText) as unknown }
-      catch { reject(new Error('O servidor devolveu uma resposta inválida. Tente novamente.')); return }
+      catch { reject(new Error('Ocorreu um erro inesperado. Tente novamente.')); return }
       if (xhr.status < 200 || xhr.status >= 300) {
         const message = body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
           ? body.error
@@ -176,7 +175,7 @@ function uploadAudioWithProgress(
       }
       const responseBody = body as Record<string, unknown> | null
       if (!responseBody || typeof responseBody.path !== 'string' || !/^podcasts\/\d{4}\/\d{2}\/[a-f0-9]{32}-[a-z0-9-]+\.mp3$/.test(responseBody.path)) {
-        reject(new Error('O servidor devolveu um caminho de áudio inválido.'))
+        reject(new Error('Não foi possível processar o envio. Tente novamente.'))
         return
       }
       resolve({
@@ -371,7 +370,6 @@ export function AdminCoursesPage() {
   const [playlistError, setPlaylistError] = useState('')
   const [audioUploadProgress, setAudioUploadProgress] = useState(0)
   const [audioUploading, setAudioUploading] = useState(false)
-  const [audioConfirmation, setAudioConfirmation] = useState<PendingAudioConfirmation | null>(null)
   const [audioDeleteQueue, setAudioDeleteQueue] = useState<string[]>([])
   const audioUploadAbortRef = useRef<AbortController | null>(null)
   const audioUploadLockRef = useRef(false)
@@ -406,6 +404,7 @@ export function AdminCoursesPage() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<DeleteCourseConfirmation | null>(null)
+  const [deleteCourseLoading, setDeleteCourseLoading] = useState(false)
 
   const getAdminAccessToken = async (): Promise<string> => {
     if (!adminSupabase) throw new Error('A autenticação administrativa não está disponível.')
@@ -415,21 +414,29 @@ export function AdminCoursesPage() {
     return token
   }
 
-  const deleteHostedAudio = async (audioPath: string): Promise<boolean> => {
+  const deleteHostedAudioSilently = async (audioPath: string): Promise<void> => {
     const source = safeResolveAudioSource(audioPath)
-    if (source?.kind !== 'host') return true
+    if (source?.kind !== 'host') return
     const uploadUrl = import.meta.env.VITE_AUDIO_UPLOAD_URL
-    if (!uploadUrl) return false
+    if (!uploadUrl) return
     try {
+      // Segurança: não apagar se outro conteúdo usa o mesmo arquivo de áudio.
+      if (adminSupabase) {
+        const { data: sharing } = await adminSupabase.from('courses').select('id').eq('audio_path', audioPath).limit(1)
+        if (sharing && sharing.length > 0) {
+          console.warn('[academia] Áudio não apagado: referenciado por outro conteúdo.')
+          return
+        }
+      }
       const token = await getAdminAccessToken()
       const response = await fetch(getDeleteAudioUrl(uploadUrl), {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: audioPath.slice('host:'.length) }),
       })
-      return response.ok
+      if (!response.ok) console.warn('[academia] Não foi possível apagar o áudio.')
     } catch {
-      return false
+      console.warn('[academia] Não foi possível apagar o áudio.')
     }
   }
 
@@ -446,7 +453,7 @@ export function AdminCoursesPage() {
       try { duration = await readAudioDuration(file) } catch { /* A duração continua editável manualmente. */ }
       const token = await getAdminAccessToken()
       const uploadUrl = import.meta.env.VITE_AUDIO_UPLOAD_URL
-      if (!uploadUrl) throw new Error('Configure VITE_AUDIO_UPLOAD_URL antes de enviar áudio.')
+      if (!uploadUrl) throw new Error('Envio de áudio não disponível. Contacte o suporte técnico.')
       const result = await uploadAudioWithProgress(uploadUrl, file, token, setAudioUploadProgress, controller.signal)
       setDraft(current => ({
         ...current,
@@ -483,24 +490,9 @@ export function AdminCoursesPage() {
       return
     }
     setError('')
-    const currentSource = safeResolveAudioSource(draft.audioPath)
-    setDraft(current => ({ ...current, audioFile: file }))
-    if (currentSource?.kind === 'host') setAudioConfirmation({ kind: 'replace', path: draft.audioPath, file })
-    else void startAudioUpload(file)
-  }
-
-  const confirmAudioAction = (deleteOldFile: boolean) => {
-    const pending = audioConfirmation
-    setAudioConfirmation(null)
-    if (!pending) return
-    if (pending.kind === 'replace') {
-      void startAudioUpload(pending.file, deleteOldFile ? pending.path : undefined)
-      return
-    }
-    setDraft(current => ({ ...current, audioFile: null, audioPath: '' }))
-    if (deleteOldFile && safeResolveAudioSource(pending.path)?.kind === 'host') {
-      setAudioDeleteQueue(current => current.includes(pending.path) ? current : [...current, pending.path])
-    }
+    // Se já havia áudio hospedado, enfileira para remoção automática após salvar.
+    const oldPath = draft.audioPath
+    void startAudioUpload(file, safeResolveAudioSource(oldPath)?.kind === 'host' ? oldPath : undefined)
   }
 
   const cancelAudioUpload = () => audioUploadAbortRef.current?.abort()
@@ -592,7 +584,6 @@ export function AdminCoursesPage() {
 
   const resetForm = useCallback(() => {
     audioUploadAbortRef.current?.abort()
-    setAudioConfirmation(null)
     setAudioDeleteQueue([])
     setDraft({ ...blankDraft, category: sectionCategory[section] ?? 'miniseries', instructor: section === 'courses' ? PROFESSOR_OPTIONS[0].value : '' })
     setEditingId(null)
@@ -611,17 +602,12 @@ export function AdminCoursesPage() {
       if (e.key === 'Escape') {
         if (categoryModalOpen) { setCategoryModalOpen(false); return }
         if (aiGenerateOpen) { setAiGenerateOpen(false); return }
-        if (audioConfirmation) {
-          if (audioConfirmation.kind === 'replace') setDraft(current => ({ ...current, audioFile: null }))
-          setAudioConfirmation(null)
-          return
-        }
         resetForm()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => { window.removeEventListener('keydown', onKey) }
-  }, [view, resetForm, aiGenerateOpen, categoryModalOpen, audioConfirmation])
+  }, [view, resetForm, aiGenerateOpen, categoryModalOpen])
 
   const createArticleCategory = async (event: FormEvent) => {
     event.preventDefault()
@@ -775,10 +761,6 @@ export function AdminCoursesPage() {
   const saveCourse = async (event: FormEvent) => {
     event.preventDefault()
     if (!adminSupabase || !user || saving || audioUploading || audioUploadLockRef.current) return
-    if (audioConfirmation) {
-      setError('Conclua primeiro a confirmação do ficheiro de áudio.')
-      return
-    }
     setSaving(true)
     setError('')
     setNotice('')
@@ -867,12 +849,7 @@ export function AdminCoursesPage() {
           if (delErr) throw delErr
         }
       }
-      let audioDeleteWarning = false
-      if (section === 'podcasts' && audioDeleteQueue.length > 0) {
-        for (const audioPath of audioDeleteQueue) {
-          if (!await deleteHostedAudio(audioPath)) audioDeleteWarning = true
-        }
-      }
+      const queuedDeletions = [...audioDeleteQueue]
       const successMsg = draft.status === 'published'
         ? (section === 'courses' ? 'Minissérie publicada na biblioteca.' : 'Conteúdo publicado na biblioteca.')
         : draft.status === 'scheduled'
@@ -886,8 +863,10 @@ export function AdminCoursesPage() {
       setActiveLessonForm(null)
       setLessonFormError('')
       setView('list')
-      setNotice(audioDeleteWarning ? `${successMsg} O ficheiro anterior não foi apagado do servidor.` : successMsg)
+      setNotice(successMsg)
       await loadDashboard()
+      // Remoção de áudios antigos em segundo plano, sem bloquear nem expor erros ao usuário.
+      for (const audioPath of queuedDeletions) void deleteHostedAudioSilently(audioPath)
     } catch (caught) {
       console.error('Falha ao salvar conteúdo no painel administrativo:', caught)
       setError(errorMessage(caught))
@@ -917,22 +896,25 @@ export function AdminCoursesPage() {
   }
 
   const deleteCourse = (course: Course) => {
-    setDeleteCourseConfirm({ id: course.id, title: course.title, audioPath: course.audio_path, deleteAudio: false })
+    setDeleteCourseConfirm({ id: course.id, title: course.title, audioPath: course.audio_path ?? null })
   }
 
   const confirmDeleteCourse = async () => {
-    if (!adminSupabase || !deleteCourseConfirm) return
-    const { id, title, audioPath, deleteAudio } = deleteCourseConfirm
+    if (!adminSupabase || !deleteCourseConfirm || deleteCourseLoading) return
+    const { id, title, audioPath } = deleteCourseConfirm
     const tableBySection: Partial<Record<AdminSection, string>> = { interviews: 'interviews', blog: 'articles', zoom: 'zoom_recordings' }
     const table = tableBySection[section] ?? 'courses'
-    setDeleteCourseConfirm(null)
+    setDeleteCourseLoading(true)
     const { error: deleteError } = await adminSupabase.from(table).delete().eq('id', id)
-    if (deleteError) setError('Não foi possível excluir o conteúdo.')
-    else {
-      let audioDeleted = true
-      if (deleteAudio && audioPath && safeResolveAudioSource(audioPath)?.kind === 'host') audioDeleted = await deleteHostedAudio(audioPath)
-      setNotice(audioDeleted ? `${title} foi excluído.` : `${title} foi excluído, mas o ficheiro de áudio continua no servidor.`)
+    setDeleteCourseLoading(false)
+    setDeleteCourseConfirm(null)
+    if (deleteError) {
+      setError('Não foi possível excluir o conteúdo.')
+    } else {
+      setNotice(`${title} foi excluído.`)
       await loadDashboard()
+      // Remoção do áudio em segundo plano, sem bloquear nem expor erros ao usuário.
+      if (audioPath) void deleteHostedAudioSilently(audioPath)
     }
   }
 
@@ -1326,15 +1308,18 @@ export function AdminCoursesPage() {
                 {draft.audioPath && (
                   <>
                     <div className="admin-audio-current">
-                      <Music size={14}/><span>{draftAudioSource?.kind === 'host' ? 'Áudio na Hostinger' : 'Áudio já enviado'}</span>
+                      <Music size={14}/><span>Áudio carregado</span>
                       <button type="button" className="admin-audio-remove-btn" disabled={audioUploading} onClick={() => {
-                        if (draftAudioSource?.kind === 'host') setAudioConfirmation({ kind: 'remove', path: draft.audioPath })
-                        else setDraft(current => ({ ...current, audioPath: '' }))
+                        const oldPath = draft.audioPath
+                        setDraft(current => ({ ...current, audioPath: '' }))
+                        if (safeResolveAudioSource(oldPath)?.kind === 'host') {
+                          setAudioDeleteQueue(current => current.includes(oldPath) ? current : [...current, oldPath])
+                        }
                       }}><X size={12}/> Remover</button>
                     </div>
                     {draftAudioSource?.kind === 'host' && (draftAudioSource.url
                       ? <audio className="admin-audio-preview" controls preload="metadata" src={draftAudioSource.url}>O navegador não suporta a reprodução de áudio.</audio>
-                      : <p className="admin-audio-preview-note">Configure VITE_MEDIA_BASE_URL para pré-visualizar este áudio.</p>)}
+                      : <p className="admin-audio-preview-note">Pré-visualização indisponível.</p>)}
                   </>
                 )}
                 <label className={`admin-audio-upload-area${draft.audioFile ? ' admin-audio-upload-area--selected' : ''}`}>
@@ -1348,8 +1333,7 @@ export function AdminCoursesPage() {
                       <div><strong>{draft.audioFile.name}</strong><span>{(draft.audioFile.size / 1024 / 1024).toFixed(1)} MB</span></div>
                       <button type="button" className="admin-audio-remove-btn admin-audio-remove-btn--inline" disabled={audioUploading || saving} onClick={event => {
                         event.preventDefault()
-                        if (draftAudioSource?.kind === 'host') setAudioConfirmation({ kind: 'remove', path: draft.audioPath })
-                        else setDraft(current => ({ ...current, audioFile: null }))
+                        setDraft(current => ({ ...current, audioFile: null }))
                       }}><X size={13}/></button>
                     </div>
                   ) : (
@@ -1409,7 +1393,7 @@ export function AdminCoursesPage() {
               <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'] }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
               {draft.status === 'scheduled' && <input type="datetime-local" className="admin-scheduled-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>}
             </div>
-            <button className="button admin-save-btn-new" type="submit" disabled={saving || audioUploading || !!audioConfirmation}>
+            <button className="button admin-save-btn-new" type="submit" disabled={saving || audioUploading}>
               {audioUploading ? <><LoaderCircle className="admin-spinner" size={17}/>A enviar áudio…</> : saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
             </button>
           </div>
@@ -1616,34 +1600,15 @@ export function AdminCoursesPage() {
       )}
     </>}
     {deleteCourseConfirm && createPortal(
-      <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-delete-course-title" onPointerDown={e => { if (e.target === e.currentTarget) setDeleteCourseConfirm(null) }}>
+      <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-delete-course-title" onPointerDown={e => { if (!deleteCourseLoading && e.target === e.currentTarget) setDeleteCourseConfirm(null) }}>
         <div className="admin-category-modal">
-          <button type="button" className="admin-edit-modal-close" onClick={() => setDeleteCourseConfirm(null)} aria-label="Fechar"><X size={18}/></button>
+          <button type="button" className="admin-edit-modal-close" disabled={deleteCourseLoading} onClick={() => setDeleteCourseConfirm(null)} aria-label="Fechar"><X size={18}/></button>
           <span className="admin-category-modal-icon" style={{ background: 'rgba(239,68,68,.12)', color: '#f87171' }}><Trash2 size={18}/></span>
-          <h2 id="admin-delete-course-title">Excluir conteúdo</h2>
-          <p>Excluir <strong>"{deleteCourseConfirm.title}"</strong>? Esta ação não pode ser desfeita.</p>
-          {deleteCourseConfirm.audioPath && safeResolveAudioSource(deleteCourseConfirm.audioPath)?.kind === 'host' && <label className="admin-field admin-audio-delete-choice"><input type="checkbox" checked={deleteCourseConfirm.deleteAudio} onChange={event => setDeleteCourseConfirm(current => current ? { ...current, deleteAudio: event.target.checked } : null)}/> Apagar também o ficheiro MP3 da Hostinger</label>}
+          <h2 id="admin-delete-course-title">Excluir {meta.item}</h2>
+          <p>Excluir <strong>"{deleteCourseConfirm.title}"</strong>? Deixará de aparecer para os alunos. Esta ação não pode ser desfeita.</p>
           <div className="admin-category-modal-actions">
-            <button type="button" className="admin-lesson-cancel-btn" onClick={() => setDeleteCourseConfirm(null)}>Cancelar</button>
-            <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} onClick={() => void confirmDeleteCourse()}><Trash2 size={14}/> Excluir</button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
-    {audioConfirmation && createPortal(
-      <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-audio-confirm-title" onPointerDown={event => { if (event.target === event.currentTarget) { if (audioConfirmation.kind === 'replace') setDraft(current => ({ ...current, audioFile: null })); setAudioConfirmation(null) } }}>
-        <div className="admin-category-modal">
-          <button type="button" className="admin-edit-modal-close" onClick={() => { if (audioConfirmation.kind === 'replace') setDraft(current => ({ ...current, audioFile: null })); setAudioConfirmation(null) }} aria-label="Fechar"><X size={18}/></button>
-          <span className="admin-category-modal-icon"><Music size={18}/></span>
-          <h2 id="admin-audio-confirm-title">{audioConfirmation.kind === 'replace' ? 'Substituir áudio' : 'Remover áudio'}</h2>
-          <p>{audioConfirmation.kind === 'replace'
-            ? 'O áudio atual está na Hostinger. Depois de enviar o novo MP3, quer também apagar o ficheiro atual do servidor?'
-            : 'Quer apenas retirar este áudio do podcast ou também apagar o ficheiro da Hostinger?'} A remoção do servidor só acontece depois de guardar a alteração.</p>
-          <div className="admin-category-modal-actions admin-audio-confirm-actions">
-            <button type="button" className="admin-lesson-cancel-btn" onClick={() => { if (audioConfirmation.kind === 'replace') setDraft(current => ({ ...current, audioFile: null })); setAudioConfirmation(null) }}>Cancelar</button>
-            <button type="button" className="admin-lesson-cancel-btn" onClick={() => confirmAudioAction(false)}>{audioConfirmation.kind === 'replace' ? 'Manter o antigo' : 'Manter no servidor'}</button>
-            <button type="button" className="admin-ai-generate-btn" onClick={() => confirmAudioAction(true)}>{audioConfirmation.kind === 'replace' ? 'Apagar após substituir' : 'Apagar após guardar'}</button>
+            <button type="button" className="admin-lesson-cancel-btn" disabled={deleteCourseLoading} onClick={() => setDeleteCourseConfirm(null)}>Cancelar</button>
+            <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} disabled={deleteCourseLoading} onClick={() => void confirmDeleteCourse()}>{deleteCourseLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Excluindo…</> : <><Trash2 size={14}/> Excluir</>}</button>
           </div>
         </div>
       </div>,
