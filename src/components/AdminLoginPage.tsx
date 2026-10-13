@@ -33,12 +33,12 @@ export function AdminLoginPage() {
       <h1>Painel administrativo</h1>
       <p className="admin-login-intro">Entre com a conta autorizada para gerir os cursos da Academia.</p>
       <form onSubmit={submit}>
-        <label htmlFor="admin-identifier">Usuario ou e-mail</label>
+        <label htmlFor="admin-identifier">Usuário ou e-mail</label>
         <input id="admin-identifier" type="text" autoComplete="username" placeholder="ericeenio ou nome@empresa.com" value={identifier} onChange={event => setIdentifier(event.target.value)} required/>
         <label htmlFor="admin-password">Senha</label>
         <div className="admin-login-password"><LockKeyhole size={16}/><input id="admin-password" type="password" autoComplete="current-password" placeholder="Sua senha" value={password} onChange={event => setPassword(event.target.value)} minLength={6} required/></div>
         {error && <p className="admin-login-error" role="alert">{error}</p>}
-        {!configured && <p className="admin-login-error" role="status">O Supabase ainda nao esta configurado neste ambiente.</p>}
+        {!configured && <p className="admin-login-error" role="status">O Supabase ainda não está configurado neste ambiente.</p>}
         <button className="button admin-login-submit" type="submit" disabled={submitting || !configured}>{submitting ? 'Entrando...' : <>Entrar no painel <ArrowRight size={16}/></>}</button>
       </form>
       <Link to="/" className="admin-login-back">Voltar ao site da Academia</Link>

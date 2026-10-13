@@ -3,126 +3,6 @@ import Cropper from 'react-easy-crop'
 import type { Area } from 'react-easy-crop'
 import { ArrowRight, BarChart3, Bell, BookOpen, Camera, Check, ChevronRight, Clock, Home, Layers3, LogOut, Mail, Mic2, Newspaper, Pencil, Play, Podcast, Search, Settings, Video, X, ZoomIn, ZoomOut } from 'lucide-react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-
-type NotifItem = { id: string; title: string; type: string; link: string; publishedAt: string; cover?: string }
-
-const TYPE_COLOR: Record<string, string> = {
-  'Minissérie': '#1d7ec7',
-  'Podcast': '#9333ea',
-  'Artigo': '#059669',
-  'Entrevista': '#d97706',
-  'Zoom': '#e11d48',
-}
-
-function useNotifications() {
-  const [items, setItems] = useState<NotifItem[]>([])
-  const [lastSeen, setLastSeen] = useState<Date>(() => {
-    const s = localStorage.getItem('notif_last_seen')
-    return s ? new Date(s) : new Date(0)
-  })
-
-  useEffect(() => {
-    if (!supabase) return
-    const client = supabase
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-    Promise.all([
-      client.from('courses').select('slug,title,category,published_at,cover_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
-      client.from('articles').select('slug,title,published_at,image_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
-      client.from('interviews').select('slug,title,published_at,thumb_url,video_id').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
-      client.from('zoom_recordings').select('id,title,published_at,thumb_url,video_url').eq('status', 'published').gte('published_at', since).order('published_at', { ascending: false }).limit(10),
-    ]).then(([courses, articles, interviews, zoom]) => {
-      const ytThumb = (id?: string | null) => id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : undefined
-      const ytId = (url?: string | null) => url?.match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/)?.[1]
-      const all: NotifItem[] = [
-        ...(courses.data ?? []).map(c => ({ id: `c-${c.slug}`, title: c.title, type: c.category === 'podcast' ? 'Podcast' : 'Minissérie', link: c.category === 'podcast' ? `/podcasts?podcast=${c.slug}` : `/assistir/${c.slug}`, publishedAt: c.published_at, cover: c.cover_url ?? undefined })),
-        ...(articles.data ?? []).map(a => ({ id: `a-${a.slug}`, title: a.title, type: 'Artigo', link: `/blog/${a.slug}`, publishedAt: a.published_at, cover: a.image_url ?? undefined })),
-        ...(interviews.data ?? []).map(i => ({ id: `i-${i.slug}`, title: i.title, type: 'Entrevista', link: `/entrevistas/${i.slug}`, publishedAt: i.published_at, cover: i.thumb_url ?? ytThumb(i.video_id) })),
-        ...(zoom.data ?? []).map(z => ({ id: `z-${z.id}`, title: z.title, type: 'Zoom', link: `/gravacoes-zoom/${z.id}`, publishedAt: z.published_at, cover: z.thumb_url ?? ytThumb(ytId(z.video_url)) })),
-      ].filter(i => !!i.publishedAt).sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()).slice(0, 20)
-      setItems(all)
-    })
-  }, [])
-
-  const unread = items.filter(i => new Date(i.publishedAt) > lastSeen).length
-  const markSeen = () => { const now = new Date(); localStorage.setItem('notif_last_seen', now.toISOString()); setLastSeen(now) }
-
-  return { items, unread, markSeen, lastSeen }
-}
-
-function formatRelative(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 60) return `há ${mins || 1} min`
-  const hours = Math.floor(diff / 3600000)
-  if (hours < 24) return `há ${hours} hora${hours > 1 ? 's' : ''}`
-  const days = Math.floor(diff / 86400000)
-  if (days === 1) return 'há 1 dia'
-  if (days < 7) return `há ${days} dias`
-  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-}
-
-function NotifRow({ item, onClose }: { item: NotifItem; onClose: () => void }) {
-  const color = TYPE_COLOR[item.type] ?? '#1d7ec7'
-  return (
-    <li>
-      <NavLink to={item.link} className="notif-item" onClick={onClose}>
-        <div className="notif-item-icon" style={{ background: `${color}22`, border: `1px solid ${color}44` }}>
-          <span style={{ color }}>{item.type[0]}</span>
-        </div>
-        <div className="notif-item-body">
-          <span className="notif-item-type" style={{ color }}>{item.type}</span>
-          <span className="notif-item-title">{item.title}</span>
-          <span className="notif-item-date">{formatRelative(item.publishedAt)}</span>
-        </div>
-        {item.cover && <img className="notif-item-thumb" src={item.cover} alt=""/>}
-      </NavLink>
-    </li>
-  )
-}
-
-export function NotificationBell() {
-  const { items, unread, markSeen, lastSeen } = useNotifications()
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
-
-  const toggle = () => { if (!open) markSeen(); setOpen(o => !o) }
-  const newItems = items.filter(i => new Date(i.publishedAt) > lastSeen)
-  const oldItems = items.filter(i => new Date(i.publishedAt) <= lastSeen)
-
-  return (
-    <div className="notif-wrap" ref={ref}>
-      <button className={`topbar-notification${open ? ' active' : ''}`} onClick={toggle} aria-label="Notificações">
-        <Bell size={21}/>
-        {unread > 0 && <i className="notif-badge-dot">{unread > 9 ? '9+' : unread}</i>}
-      </button>
-      {open && (
-        <div className="notif-dropdown">
-          <div className="notif-panel-header">Notificações</div>
-          {items.length === 0
-            ? <p className="notif-empty">Sem novidades nos últimos 30 dias.</p>
-            : <>
-                {newItems.length > 0 && <>
-                  <div className="notif-section-label">Novas</div>
-                  <ul className="notif-list">{newItems.map(item => <NotifRow key={item.id} item={item} onClose={() => setOpen(false)}/>)}</ul>
-                </>}
-                {oldItems.length > 0 && <>
-                  <div className="notif-section-label">{newItems.length > 0 ? 'Anteriores' : 'Recentes'}</div>
-                  <ul className="notif-list">{oldItems.map(item => <NotifRow key={item.id} item={item} onClose={() => setOpen(false)}/>)}</ul>
-                </>}
-              </>
-          }
-        </div>
-      )}
-    </div>
-  )
-}
 import { areas } from '../data/content'
 import { usePublishedCourses } from '../data/usePublishedCourses'
 import { useAuth } from '../auth/useAuth'
@@ -241,7 +121,7 @@ export function Footer() {
   return <footer className="site-footer"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><span>Aprender · Compartilhar · Crescer</span><span>© {new Date().getFullYear()} Academia do Empreendedor</span></footer>
 }
 
-type ProgressRow = { course_slug: string; progress_percent: number; completed: boolean; current_time_seconds: number; last_watched_at: string }
+type ProgressRow = { course_slug: string; lesson_id: string; progress_percent: number; completed: boolean; current_time_seconds: number; last_watched_at: string }
 
 function formatTime(s: number) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
@@ -250,6 +130,7 @@ function formatTime(s: number) {
 
 export function ProfilePage() {
   const { user, signOut } = useAuth()
+  const { courses: publishedCourses } = usePublishedCourses()
   const navigate = useNavigate()
   const handleLogout = async () => { await signOut(); navigate('/login') }
   const initial = user?.email?.[0]?.toUpperCase() || 'P'
@@ -268,7 +149,7 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (!supabase || !user) return
-    supabase.from('lesson_progress').select('course_slug,progress_percent,completed,current_time_seconds,last_watched_at').eq('user_id', user.id).order('last_watched_at', { ascending: false }).then(({ data }) => { if (data) setProgressRows(data as ProgressRow[]) })
+    supabase.from('lesson_progress').select('course_slug,lesson_id,progress_percent,completed,current_time_seconds,last_watched_at').eq('user_id', user.id).order('last_watched_at', { ascending: false }).then(({ data }) => { if (data) setProgressRows(data as ProgressRow[]) })
   }, [user])
 
   const [pendingCoverBlob, setPendingCoverBlob] = useState<Blob | null>(null)
@@ -377,7 +258,14 @@ export function ProfilePage() {
 
   const memberSince = user?.created_at ? new Date(user.created_at).toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
   const recentActivity = progressRows.slice(0, 5)
-  const watchedCourses = progressRows.filter((r, i, arr) => arr.findIndex(x => x.course_slug === r.course_slug) === i)
+  const watchedCourses = publishedCourses
+    .filter(course => {
+      const lessons = course.lessons ?? []
+      const completedLessonIds = new Set(progressRows.filter(row => row.course_slug === course.slug && row.completed).map(row => row.lesson_id))
+      return lessons.length > 0 && lessons.every(lesson => lesson.id !== undefined && completedLessonIds.has(lesson.id))
+    })
+    .map(course => ({ course, row: progressRows.find(row => row.course_slug === course.slug)! }))
+    .sort((a, b) => b.row.last_watched_at.localeCompare(a.row.last_watched_at))
 
   return <main className="profile-page-v3">
     <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={onFileChange}/>
@@ -428,47 +316,43 @@ export function ProfilePage() {
 
     <div className="pv3-grid">
       <div className="pv3-col-main">
-        <div className="pv3-card">
+        {watchedCourses.length > 0 && <div className="pv3-card">
           <h2 className="pv3-section-title">As minhas formações</h2>
-          {watchedCourses.length === 0
-            ? <p className="pv3-empty">Ainda não iniciou nenhuma formação. <Link to="/" className="text-link">Explorar biblioteca</Link></p>
-            : <ul className="pv3-formations-list">
-                {watchedCourses.map(row => {
-                  const course = areas.find(a => a.slug === row.course_slug)
-                  if (!course) return null
-                  const Icon = course.Icon
-                  const pct = Math.round(row.progress_percent)
-                  return <li key={row.course_slug} className="pv3-formation-item">
-                    <div className="pv3-formation-icon"><Icon size={20}/></div>
-                    <div className="pv3-formation-info">
-                      <span className="pv3-formation-title">{course.title}</span>
-                      <span className="pv3-formation-cat">{course.category}</span>
-                      <div className="pv3-progress-bar"><div className="pv3-progress-fill" style={{width:`${pct}%`}}/></div>
-                    </div>
-                    <span className={`pv3-formation-badge ${row.completed ? 'pv3-badge--done' : 'pv3-badge--progress'}`}>{row.completed ? 'Concluído' : `${pct}%`}</span>
-                    <Link to={`/assistir/${row.course_slug}`} className="pv3-formation-arrow"><ChevronRight size={16}/></Link>
-                  </li>
-                })}
-              </ul>
-          }
-        </div>
+          <ul className="pv3-formations-list">
+            {watchedCourses.map(({ course, row }) => {
+              const Icon = course.Icon
+              return <li key={row.course_slug} className="pv3-formation-item">
+                <div className="pv3-formation-icon"><Icon size={20}/></div>
+                <div className="pv3-formation-info">
+                  <span className="pv3-formation-title">{course.title}</span>
+                  <span className="pv3-formation-cat">{course.category}</span>
+                  <div className="pv3-progress-bar"><div className="pv3-progress-fill" style={{width:'100%'}}/></div>
+                </div>
+                <span className="pv3-formation-badge pv3-badge--done">Concluído</span>
+                <Link to={`/assistir/${row.course_slug}`} className="pv3-formation-arrow"><ChevronRight size={16}/></Link>
+              </li>
+            })}
+          </ul>
+        </div>}
 
         {recentActivity.length > 0 && <div className="pv3-card">
           <h2 className="pv3-section-title">Actividade recente</h2>
           <ul className="pv3-activity-list">
-            {recentActivity.map((row, i) => {
-              const course = areas.find(a => a.slug === row.course_slug)
+            {recentActivity.map(row => {
+              const course = publishedCourses.find(a => a.slug === row.course_slug) ?? areas.find(a => a.slug === row.course_slug)
               const date = new Date(row.last_watched_at)
               const today = new Date(); const diff = Math.floor((today.getTime() - date.getTime()) / 86400000)
               const dateLabel = diff === 0 ? 'Hoje' : diff === 1 ? 'Ontem' : `${diff} dias atrás`
-              return <li key={i} className="pv3-activity-item">
-                <div className="pv3-activity-icon"><Play size={13}/></div>
-                <div className="pv3-activity-info">
-                  <span className="pv3-activity-title">{course?.title ?? row.course_slug}</span>
-                  <span className="pv3-activity-sub"><Clock size={11}/>{formatTime(row.current_time_seconds)} assistidos</span>
-                </div>
-                <span className="pv3-activity-date">{dateLabel}</span>
-                <ChevronRight size={14} className="pv3-activity-arrow"/>
+              return <li key={row.course_slug + '-' + row.lesson_id} className="pv3-activity-list-item">
+                <Link to={`/assistir/${row.course_slug}`} className="pv3-activity-item" aria-label={`Abrir curso ${course?.title ?? row.course_slug}`}>
+                  <div className="pv3-activity-icon"><Play size={13}/></div>
+                  <div className="pv3-activity-info">
+                    <span className="pv3-activity-title">{course?.title ?? row.course_slug}</span>
+                    <span className="pv3-activity-sub"><Clock size={11}/>{formatTime(row.current_time_seconds)} assistidos</span>
+                  </div>
+                  <span className="pv3-activity-date">{dateLabel}</span>
+                  <ChevronRight size={14} className="pv3-activity-arrow"/>
+                </Link>
               </li>
             })}
           </ul>

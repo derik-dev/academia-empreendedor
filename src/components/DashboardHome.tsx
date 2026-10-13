@@ -1,5 +1,5 @@
 ﻿import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowRight, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Play } from 'lucide-react'
+import { ArrowRight, Bell, ChevronDown, ChevronLeft, ChevronRight, MoreVertical, Play } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/useAuth'
 import { areas, courseVideoUrls, type ContentArea } from '../data/content'
@@ -11,8 +11,7 @@ import { useInterviews } from '../data/useInterviews'
 import type { Interview } from '../types/interview'
 import { useArticles } from '../data/useArticles'
 import { supabase } from '../lib/supabase'
-import { isReportableSystemError, reportSystemAlert, systemAlertTypeForError } from '../lib/monitoring'
-import { NotificationBell, SearchHeader, Sidebar } from './Chrome'
+import { SearchHeader, Sidebar } from './Chrome'
 
 type Progress = {
   courseSlug: string
@@ -36,7 +35,7 @@ function formatVideoDuration(totalSeconds: number) {
 }
 
 
-function LearningCard({ course, itemProgress, cardWidth, carousel = false }: { course: ContentArea; itemProgress?: Progress; cardWidth: number; carousel?: boolean }) {
+function LearningCard({ course, itemProgress, cardWidth, carousel = false, loading = false }: { course: ContentArea; itemProgress?: Progress; cardWidth: number; carousel?: boolean; loading?: boolean }) {
   const isPodcast = course.category === 'Podcasts'
   const contentHref = isPodcast ? '/podcasts?podcast=' + encodeURIComponent(course.slug) : '/assistir/' + course.slug
   const percent = Math.min(100, Math.max(0, Math.round(itemProgress?.completed ? 100 : itemProgress?.percent ?? 0)))
@@ -49,14 +48,13 @@ function LearningCard({ course, itemProgress, cardWidth, carousel = false }: { c
   const durationLabel = itemProgress?.duration || shownLesson?.durationSeconds
     ? formatVideoDuration(itemProgress?.duration || shownLesson?.durationSeconds || 0)
     : course.durationText || ((course.videoCount ?? 0) > 0 ? course.videoCount + ' aulas' : 'Em breve')
-  const thumbnailHeight = cardWidth > 300 ? Math.max(0, (cardWidth - 14) * 9 / 16 - 70) : undefined
   const lessonDetail = shownLesson
     ? 'Aula ' + (shownLesson.position + 1) + ' • ' + shownLesson.title
     : hasVideo ? 'Aula disponível • ' + course.category.replace(/s$/, '') : 'Conteúdo em breve'
 
   return <article className="home-learning-card" style={carousel && cardWidth ? {flex: '0 0 ' + cardWidth + 'px'} : undefined}>
-    <Link to={contentHref} className="home-learning-image" aria-label={(isPodcast ? 'Abrir podcast ' : 'Abrir ') + course.title} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
-      <img src={cardCover(course.image)} alt="" />
+    <Link to={contentHref} className={`home-learning-image${loading ? ' home-learning-image--loading' : ''}`} aria-label={(isPodcast ? 'Abrir podcast ' : 'Abrir ') + course.title}>
+      <img key={cardCover(course.image)} src={cardCover(course.image)} alt="" />
       <span className="home-video-count">{durationLabel}</span>
     </Link>
     <div className="home-learning-body">
@@ -76,11 +74,10 @@ function LearningCard({ course, itemProgress, cardWidth, carousel = false }: { c
 
 
 function InterviewCard({ interview, cardWidth }: { interview: Interview; cardWidth: number }) {
-  const thumbnailHeight = cardWidth > 300 ? Math.max(0, (cardWidth - 14) * 9 / 16 - 70) : undefined
   const guestPhoto = getProfessorPhoto(interview.guest)
 
   return <article className="home-learning-card home-interview-card" style={cardWidth ? {flex: '0 0 ' + cardWidth + 'px'} : undefined}>
-    <Link to={'/entrevistas/' + interview.slug} className="home-learning-image" aria-label={'Assistir ' + interview.title} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
+    <Link to={'/entrevistas/' + interview.slug} className="home-learning-image" aria-label={'Assistir ' + interview.title}>
       <img src={cardCover(interview.thumb)} alt="" />
       <span className="home-video-count">{interview.duration}</span>
     </Link>
@@ -99,10 +96,8 @@ function InterviewCard({ interview, cardWidth }: { interview: Interview; cardWid
 }
 
 function ArticleHomeCard({ article, cardWidth }: { article: { slug: string; title: string; category: string; readTime: string; excerpt: string; image: string }; cardWidth: number }) {
-  const thumbnailHeight = cardWidth > 300 ? Math.max(0, (cardWidth - 14) * 9 / 16 - 70) : undefined
-
   return <article className="home-learning-card home-article-card" style={cardWidth ? {flex: '0 0 ' + cardWidth + 'px'} : undefined}>
-    <Link to={'/blog/' + article.slug} className="home-learning-image" aria-label={'Ler ' + article.title} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
+    <Link to={'/blog/' + article.slug} className="home-learning-image" aria-label={'Ler ' + article.title}>
       <img src={article.image} alt="" onError={event => { event.currentTarget.onerror = null; event.currentTarget.src = img('/images/blog-page-banner.png') }}/>
       <span className="home-video-count">{article.readTime}</span>
     </Link>
@@ -138,12 +133,14 @@ function HomeShelf({ title, children, itemCount, cardWidth }: { title: string; c
 
 export function DashboardHome() {
   const { user } = useAuth()
-  const { courses: published } = usePublishedCourses()
+  const { courses: published, loading: coursesLoading } = usePublishedCourses()
   const { interviews } = useInterviews()
   const { articles } = useArticles()
   const publishedSlugs = new Set(published.map(c => c.slug))
   const areaImage = Object.fromEntries(areas.map(a => [a.slug, a.image]))
-  const courses = [...areas.filter(a => !publishedSlugs.has(a.slug)), ...published.map(c => ({ ...c, image: c.image || areaImage[c.slug] || '' }))]
+  const withFallback = published.map(c => ({ ...c, image: c.image || areaImage[c.slug] || '' }))
+  const staticPlaceholders = (!supabase || coursesLoading) ? areas.filter(a => !publishedSlugs.has(a.slug)) : []
+  const courses = [...staticPlaceholders, ...withFallback]
   const [progress, setProgress] = useState<Record<string, Progress>>({})
 
   useEffect(() => {
@@ -154,17 +151,12 @@ export function DashboardHome() {
       .select('course_slug,lesson_id,progress_percent,completed,current_time_seconds,duration_seconds,last_watched_at')
       .eq('user_id', user.id)
       .order('last_watched_at', { ascending: false })
-      .then(async ({ data, error }) => {
-        if (error) {
-          if (isReportableSystemError(error)) void reportSystemAlert({ type: systemAlertTypeForError(error), message: error.message, metadata: { component: 'DashboardHome', operation: 'select', table: 'lesson_progress', code: error.code } })
-          return
-        }
+      .then(async ({ data }) => {
         if (!active || !data) return
         const lessonIds = [...new Set(data.map(row => String(row.lesson_id ?? '')).filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)))]
         const lessonTitles = new Map<string, { title: string; position: number }>()
         if (lessonIds.length) {
-          const { data: lessonRows, error: lessonsError } = await client.from('lessons').select('id,title,position').in('id', lessonIds)
-          if (lessonsError && isReportableSystemError(lessonsError)) void reportSystemAlert({ type: systemAlertTypeForError(lessonsError), message: lessonsError.message, metadata: { component: 'DashboardHome', operation: 'select', table: 'lessons', code: lessonsError.code } })
+          const { data: lessonRows } = await client.from('lessons').select('id,title,position').in('id', lessonIds)
           for (const lesson of lessonRows ?? []) lessonTitles.set(lesson.id, { title: lesson.title, position: lesson.position })
         }
         if (!active) return
@@ -183,8 +175,6 @@ export function DashboardHome() {
           }
         }
         setProgress(next)
-      }).catch(error => {
-        if (isReportableSystemError(error)) void reportSystemAlert({ type: 'database_error', message: error instanceof Error ? error.message : 'Falha ao carregar progresso', metadata: { component: 'DashboardHome', operation: 'loadProgress' } })
       })
     return () => { active = false }
   }, [user])
@@ -219,7 +209,7 @@ export function DashboardHome() {
           <div className="home-welcome-copy"><h1>Olá, {displayName}</h1><p>Continue sua jornada de aprendizagem.</p></div>
           <div className="home-search-bar"><SearchHeader /></div>
           <div className="home-welcome-actions">
-            <NotificationBell/>
+            <span className="topbar-notification"><Bell size={21}/><i/></span>
             <Link className="topbar-account" to="/perfil"><span className="avatar">{displayName[0]?.toUpperCase()}</span><strong>{displayName}</strong><ChevronDown size={16}/></Link>
           </div>
         </section>
@@ -236,7 +226,7 @@ export function DashboardHome() {
         </section>}
 
         <HomeShelf title="Explore a biblioteca" itemCount={courses.length} cardWidth={cardWidth}>
-          {courses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel/>)}
+          {courses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel loading={coursesLoading}/>)}
         </HomeShelf>
 
         <section className="home-learning" id="meus-cursos">
@@ -259,8 +249,8 @@ export function DashboardHome() {
 
 
         <div className="home-content-shelves">
-          {miniseriesCourses.length > 0 && <HomeShelf title="Minisséries" itemCount={miniseriesCourses.length} cardWidth={cardWidth}>{miniseriesCourses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel/>)}</HomeShelf>}
-          {podcastCourses.length > 0 && <HomeShelf title="Podcasts" itemCount={podcastCourses.length} cardWidth={cardWidth}>{podcastCourses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel/>)}</HomeShelf>}
+          {miniseriesCourses.length > 0 && <HomeShelf title="Minisséries" itemCount={miniseriesCourses.length} cardWidth={cardWidth}>{miniseriesCourses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel loading={coursesLoading}/>)}</HomeShelf>}
+          {podcastCourses.length > 0 && <HomeShelf title="Podcasts" itemCount={podcastCourses.length} cardWidth={cardWidth}>{podcastCourses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel loading={coursesLoading}/>)}</HomeShelf>}
           {interviews.length > 0 && <HomeShelf title="Entrevistas" itemCount={interviews.length} cardWidth={cardWidth}>{interviews.map(interview => <InterviewCard key={interview.slug} interview={interview} cardWidth={cardWidth}/>)}</HomeShelf>}
           {articles.length > 0 && <HomeShelf title="Artigos e conteúdos" itemCount={articles.length} cardWidth={cardWidth}>{articles.map(article => <ArticleHomeCard key={article.slug} article={article} cardWidth={cardWidth}/>)}</HomeShelf>}
         </div>

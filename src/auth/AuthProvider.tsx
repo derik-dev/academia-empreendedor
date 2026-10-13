@@ -14,6 +14,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, next) => { setSession(next); setLoading(false) })
     return () => listener.subscription.unsubscribe()
   }, [])
+
+  // Detecta exclusão ou suspensão de conta pelo admin em até 30 segundos
+  useEffect(() => {
+    if (!supabase || !session) return
+    const validate = async () => {
+      try {
+        const { error } = await supabase!.auth.getUser()
+        if (error) await supabase!.auth.signOut({ scope: 'local' })
+      } catch { /* rede indisponível — não deslogar */ }
+    }
+    const id = window.setInterval(validate, 30_000)
+    return () => window.clearInterval(id)
+  }, [session])
   const signIn = async (identifier: string, password: string) => {
     if (!supabase) return 'O Supabase ainda não está configurado. Preencha as variáveis do arquivo .env.'
     const normalizedIdentifier = identifier.trim().toLowerCase()

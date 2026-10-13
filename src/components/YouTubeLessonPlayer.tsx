@@ -292,8 +292,13 @@ export function YouTubeLessonPlayer({ courseSlug, lessonId, videoUrl }: { course
       {playerError && <div className="youtube-player-error" role="alert"><span className="eyebrow">PLAYER DO YOUTUBE</span><p>{playerError}</p></div>}
     </div>
     <div className="lesson-progress-summary" aria-live="polite">
-      <strong>{shownPercent}% concluído</strong>
-      {showResumePoint && <span>Continuar de {formatTime(savedTime)}</span>}
+      <div className="lesson-progress-header">
+        <strong><span>{shownPercent}%</span> concluído</strong>
+        {showResumePoint && <span className="lesson-progress-resume">Continuar de {formatTime(savedTime)}</span>}
+      </div>
+      <div className="lesson-progress-track" role="progressbar" aria-label="Progresso da aula" aria-valuemin={0} aria-valuemax={100} aria-valuenow={shownPercent}>
+        <span style={{ width: shownPercent + '%' }} />
+      </div>
     </div>
     {message && <p className="youtube-progress-message" role="status">{message}</p>}
   </div>

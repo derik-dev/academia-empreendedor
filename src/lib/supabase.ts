@@ -20,6 +20,7 @@ function getSupabaseBaseUrl(value: string | undefined) {
 }
 
 const supabaseBaseUrl = getSupabaseBaseUrl(url)
+export const supabaseUrl: string = supabaseBaseUrl ?? ''
 export const isSupabaseConfigured = Boolean(supabaseBaseUrl && anonKey && !supabaseBaseUrl.includes('your-project'))
 export const supabase = isSupabaseConfigured ? createClient(supabaseBaseUrl!, anonKey!.trim()) : null
 // Sessão separada para o painel: autenticar ou sair do admin não altera a sessão dos alunos.

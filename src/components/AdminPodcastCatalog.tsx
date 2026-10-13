@@ -5,6 +5,7 @@ import { adminSupabase } from '../lib/supabase'
 import { img } from '../lib/publicUrl'
 import { cardCover } from '../lib/cardCover'
 import { getProfessorPhoto } from '../lib/adminAuthors'
+import { areas } from '../data/content'
 import type { Course } from './AdminCoursesPage'
 import { AdminHeroArtwork } from './AdminHeroArtwork'
 import { AdminSelect } from './AdminSelect'
@@ -26,11 +27,13 @@ export function Waveform({ color = 'blue' }: { color?: 'blue' | 'green' | 'silve
   return <span className={`podcast-admin-wave podcast-admin-wave--${color}`} aria-hidden="true">{waveBars.map((height, index) => <i key={index} style={{ height }}/>)}</span>
 }
 
+const areaImage: Record<string, string> = Object.fromEntries(areas.map(a => [a.slug, a.image]))
+
 export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDelete, variant = 'podcast' }: Props) {
   const isInterview = variant === 'interview'
   const title = isInterview ? 'Entrevistas' : 'Podcasts'
   const [query, setQuery] = useState('')
-  const [status, setStatus] = useState<'all' | 'published' | 'draft'>('all')
+  const [status, setStatus] = useState<'all' | 'published' | 'draft' | 'scheduled'>('all')
   const [author, setAuthor] = useState('')
   const [order, setOrder] = useState<'newest' | 'oldest'>('newest')
   const [layout, setLayout] = useState<'list' | 'grid'>('list')
@@ -80,7 +83,7 @@ export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDele
 
       <div className="podcast-admin-filters">
         <label className="podcast-admin-search"><Search size={19}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isInterview ? 'Buscar entrevistas ou convidados...' : 'Buscar podcasts ou autores...'} aria-label={isInterview ? 'Buscar entrevistas ou convidados' : 'Buscar podcasts ou autores'}/></label>
-        <AdminSelect className="podcast-admin-filter-select" ariaLabel="Filtrar por status" value={status} onChange={value => setStatus(value as typeof status)} options={[{ value: 'all', label: 'Todos os status' }, { value: 'published', label: 'Publicados' }, { value: 'draft', label: 'Rascunhos' }]}/>
+        <AdminSelect className="podcast-admin-filter-select" ariaLabel="Filtrar por status" value={status} onChange={value => setStatus(value as typeof status)} options={[{ value: 'all', label: 'Todos os status' }, { value: 'published', label: 'Publicados' }, { value: 'scheduled', label: 'Agendados' }, { value: 'draft', label: 'Rascunhos' }]}/>
         <AdminSelect className="podcast-admin-filter-select" ariaLabel={isInterview ? 'Filtrar por convidado' : 'Filtrar por autor'} value={author} onChange={setAuthor} options={[{ value: '', label: isInterview ? 'Todos os convidados' : 'Todos os autores' }, ...authors.map(name => ({ value: name, label: name, avatar: getProfessorPhoto(name) ? img(getProfessorPhoto(name)!) : undefined }))]}/>
         <AdminSelect className="podcast-admin-filter-select" ariaLabel={`Ordenar ${title.toLowerCase()}`} value={order} onChange={value => setOrder(value as typeof order)} options={[{ value: 'newest', label: 'Mais recentes' }, { value: 'oldest', label: 'Mais antigos' }]}/>
       </div>
@@ -95,8 +98,8 @@ export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDele
 
       {loading ? <p className="podcast-admin-empty">Carregando {title.toLowerCase()}…</p> : filtered.length ? <div className={`podcast-admin-items podcast-admin-items--${layout}`}>
         {filtered.map(course => <article className={`podcast-admin-item${isInterview ? ' podcast-admin-item--interview' : ''}`} key={course.id}>
-          <div className="podcast-admin-cover"><img src={cardCover(course.cover_url)} alt=""/>{isInterview && <span className="podcast-admin-interview-tag"><Video size={12}/> Entrevista</span>}{course.duration_text && <span className="podcast-admin-duration"><Play size={12} fill="currentColor"/> {course.duration_text}</span>}</div>
-          <div className="podcast-admin-item-copy"><h3>{course.title}</h3><span className="podcast-admin-author"><User size={14}/> {isInterview ? 'Convidado' : 'Participantes'}: {course.instructor || 'Não informado'}</span><p>{course.description}</p><div className="podcast-admin-item-meta"><span className={`podcast-admin-status podcast-admin-status--${course.status}`}><i/>{course.status === 'published' ? 'Publicado' : 'Rascunho'}</span><span><CalendarDays size={15}/> {dateLabel(course.published_at || course.created_at)}</span></div></div>
+          <div className="podcast-admin-cover"><img src={cardCover(course.cover_url || areaImage[course.slug])} alt=""/>{isInterview && <span className="podcast-admin-interview-tag"><Video size={12}/> Entrevista</span>}{course.duration_text && <span className="podcast-admin-duration"><Play size={12} fill="currentColor"/> {course.duration_text}</span>}</div>
+          <div className="podcast-admin-item-copy"><h3>{course.title}</h3><span className="podcast-admin-author"><User size={14}/> {isInterview ? 'Convidado' : 'Participantes'}: {course.instructor || 'Não informado'}</span><p>{course.description}</p><div className="podcast-admin-item-meta"><span className={`podcast-admin-status podcast-admin-status--${course.status}`}><i/>{course.status === 'published' ? 'Publicado' : course.status === 'scheduled' ? 'Agendado' : 'Rascunho'}</span><span><CalendarDays size={15}/> {dateLabel(course.published_at || course.created_at)}</span></div></div>
           <Waveform color={course.status === 'published' ? 'blue' : 'silver'}/>
           <div className="podcast-admin-item-actions"><Link to={isInterview ? `/entrevistas/${course.slug}` : `/assistir/${course.slug}`} className="podcast-admin-action" title="Ver no site" aria-label={`Ver ${course.title} no site`}><Eye size={18}/></Link><button className="podcast-admin-action" type="button" title="Editar" aria-label={`Editar ${course.title}`} onClick={() => onEdit(course)}><Pencil size={18}/></button><button className="podcast-admin-action podcast-admin-action--danger" type="button" title="Excluir" aria-label={`Excluir ${course.title}`} onClick={() => onDelete(course)}><Trash2 size={18}/></button></div>
         </article>)}

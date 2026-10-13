@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, useMemo, type FormEvent } from 'react'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Bookmark, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, LayoutGrid, Link2, LoaderCircle, LockKeyhole, Linkedin, Mail, MoreVertical, Pause, Play, Plus, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Twitter, Video, Volume2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Plus, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
 import { useAuth } from './auth/useAuth'
 import { useAdminAuth } from './auth/useAdminAuth'
 import { AdminAuthProvider } from './auth/AdminAuthProvider'
@@ -20,43 +20,7 @@ import { DashboardHome } from './components/DashboardHome'
 import { img } from './lib/publicUrl'
 import { cardCover } from './lib/cardCover'
 import { getProfessorPhoto } from './lib/adminAuthors'
-
-function sanitizeHtml(html: string): string {
-  const allowed = new Set(['p','br','b','strong','i','em','u','s','ul','ol','li','h1','h2','h3','h4','h5','h6','blockquote','pre','code','hr','a','img','span','div','table','thead','tbody','tr','th','td','figure','figcaption'])
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  const walk = (node: Node) => {
-    const toRemove: Node[] = []
-    node.childNodes.forEach(child => {
-      if (child.nodeType === Node.ELEMENT_NODE) {
-        const el = child as Element
-        const tag = el.tagName.toLowerCase()
-        if (!allowed.has(tag)) {
-          toRemove.push(child)
-          return
-        }
-        // Strip event handler and javascript: attributes
-        Array.from(el.attributes).forEach(attr => {
-          if (attr.name.startsWith('on') || (attr.value && /^\s*javascript:/i.test(attr.value))) {
-            el.removeAttribute(attr.name)
-          }
-        })
-        walk(child)
-      }
-    })
-    toRemove.forEach(n => {
-      const el = n as Element
-      // Lift children of div/span instead of dropping them entirely
-      if (el.tagName && ['script','style','iframe','object','embed','form','input','button','select','textarea','link','meta','base'].includes(el.tagName.toLowerCase())) {
-        n.parentNode?.removeChild(n)
-      } else {
-        while (el.firstChild) n.parentNode?.insertBefore(el.firstChild, n)
-        n.parentNode?.removeChild(n)
-      }
-    })
-  }
-  walk(doc.body)
-  return doc.body.innerHTML
-}
+import { sanitizeHtml } from './lib/sanitizeHtml'
 
 let _ytApiPromise: Promise<any> | null = null
 function loadYT(): Promise<any> {
@@ -106,7 +70,9 @@ function useLibraryCourses() {
   const publishedSlugs = new Set(published.map(c => c.slug))
   const areaImage = Object.fromEntries(areas.map(a => [a.slug, a.image]))
   const withFallback = published.map(c => ({ ...c, image: c.image || areaImage[c.slug] || '' }))
-  return { courses: [...areas.filter(a => !publishedSlugs.has(a.slug)), ...withFallback], loading }
+  // After Supabase loads, show only what it returned — no static placeholders for managed slugs
+  const staticPlaceholders = (!supabase || loading) ? areas.filter(a => !publishedSlugs.has(a.slug)) : []
+  return { courses: [...staticPlaceholders, ...withFallback], loading }
 }
 
 function getYouTubeEmbedUrl(videoUrl?: string) {
@@ -120,7 +86,7 @@ function getYouTubeEmbedUrl(videoUrl?: string) {
 
 function MinisSeriesPage() {
   const { user } = useAuth()
-  const { courses: libraryCourses } = useLibraryCourses()
+  const { courses: libraryCourses, loading: coursesLoading } = useLibraryCourses()
   const items = libraryCourses.filter(item => item.category === 'Minisséries')
   const [progress, setProgress] = useState<Record<string, { percent: number; completed: boolean }>>({})
   const gridRef = useRef<HTMLDivElement>(null)
@@ -190,8 +156,8 @@ function MinisSeriesPage() {
           const thumbnailHeight = cardWidth > 300 ? Math.max(0, (cardWidth - 14) * 9 / 16 - 70) : undefined
           const lessonDetail = shownLesson ? 'Aula ' + (shownLesson.position + 1) + ' • ' + shownLesson.title : item.status === 'published' ? 'Aula disponível • Minissérie' : 'Conteúdo em breve'
           return <article className="home-learning-card" key={item.slug}>
-            <Link to={'/assistir/' + item.slug} className="home-learning-image" aria-label={'Abrir ' + item.title} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
-              <img src={cardCover(item.image)} alt=""/>
+            <Link to={'/assistir/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
+              <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
               <span className="home-video-count">{durationLabel}</span>
             </Link>
             <div className="home-learning-body">
@@ -222,11 +188,11 @@ function formatPodcastTime(s: number) {
   const m = Math.floor(s / 60); return `${m}:${String(Math.round(s % 60)).padStart(2, '0')}`
 }
 
-function PodcastAudioPlayer({ videoId, title, author, image, onClose }: { videoId: string; title: string; author: string; image?: string; onClose: () => void }) {
+function PodcastAudioPlayer({ videoId, title, author, image, playing, onPlayingChange, onClose }: { videoId: string; title: string; author: string; image?: string; playing: boolean; onPlayingChange: (playing: boolean) => void; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const playerRef = useRef<any>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval>>()
-  const [playing, setPlaying] = useState(false)
+  const playingRef = useRef(playing)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [volume, setVolume] = useState(80)
@@ -237,18 +203,19 @@ function PodcastAudioPlayer({ videoId, title, author, image, onClose }: { videoI
       if (!active || !containerRef.current) return
       playerRef.current = new YT.Player(containerRef.current, {
         videoId,
-        playerVars: { autoplay: 1, controls: 0, playsinline: 1 },
+        playerVars: { autoplay: 0, controls: 0, playsinline: 1 },
         events: {
           onReady: (e: any) => {
             if (!active) return
             const dur = e.target.getDuration()
             if (dur > 0) setDuration(dur)
             e.target.setVolume(80)
-            e.target.playVideo()
+            if (playingRef.current) e.target.playVideo()
           },
           onStateChange: (e: any) => {
             if (!active) return
-            setPlaying(e.data === 1)
+            if (e.data === 1) onPlayingChange(true)
+            else if (e.data === 0 || e.data === 2) onPlayingChange(false)
             if (e.data === 1) {
               intervalRef.current = setInterval(() => setCurrentTime(Math.round(playerRef.current?.getCurrentTime?.() ?? 0)), 500)
             } else {
@@ -267,6 +234,15 @@ function PodcastAudioPlayer({ videoId, title, author, image, onClose }: { videoI
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId])
+
+  useEffect(() => {
+    playingRef.current = playing
+    const player = playerRef.current
+    if (!player) return
+    const state = player.getPlayerState?.()
+    if (playing && state !== 1 && state !== 3) player.playVideo()
+    else if (!playing && state !== 2 && state !== 0) player.pauseVideo()
+  }, [playing])
 
   const toggle = () => { playing ? playerRef.current?.pauseVideo() : playerRef.current?.playVideo() }
   const seek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); playerRef.current?.seekTo(t, true); setCurrentTime(t) }
@@ -301,7 +277,80 @@ function PodcastAudioPlayer({ videoId, title, author, image, onClose }: { videoI
   </div>
 }
 
-function PodcastDetailPanel({ item, allItems, onClose, onPlay }: { item: ContentArea; allItems: ContentArea[]; onClose: () => void; onPlay: (item: ContentArea) => void }) {
+function NativePodcastPlayer({ signedUrl, title, author, image, playing, onPlayingChange, onClose }: { signedUrl: string; title: string; author: string; image?: string; playing: boolean; onPlayingChange: (playing: boolean) => void; onClose: () => void }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [volume, setVolume] = useState(80)
+  const [audioError, setAudioError] = useState(false)
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const onTimeUpdate = () => setCurrentTime(Math.round(audio.currentTime))
+    const onDurationChange = () => { if (isFinite(audio.duration)) setDuration(Math.round(audio.duration)) }
+    const onPlay = () => { setAudioError(false); onPlayingChange(true) }
+    const onPause = () => onPlayingChange(false)
+    const onEnded = () => onPlayingChange(false)
+    const onError = () => { onPlayingChange(false); setAudioError(true) }
+    audio.addEventListener('timeupdate', onTimeUpdate)
+    audio.addEventListener('durationchange', onDurationChange)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('ended', onEnded)
+    audio.addEventListener('error', onError)
+    return () => {
+      audio.removeEventListener('timeupdate', onTimeUpdate)
+      audio.removeEventListener('durationchange', onDurationChange)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('error', onError)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (playing && audio.paused) audio.play().catch(() => {})
+    else if (!playing && !audio.paused) audio.pause()
+  }, [playing])
+
+  const toggle = () => { const a = audioRef.current; if (!a) return; playing ? a.pause() : a.play().catch(() => {}) }
+  const seek = (e: React.ChangeEvent<HTMLInputElement>) => { const t = Number(e.target.value); if (audioRef.current) { audioRef.current.currentTime = t; setCurrentTime(t) } }
+  const changeVolume = (e: React.ChangeEvent<HTMLInputElement>) => { const v = Number(e.target.value); setVolume(v); if (audioRef.current) audioRef.current.volume = v / 100 }
+  const skip = (s: number) => { const a = audioRef.current; if (!a) return; const t = Math.max(0, Math.min(duration, currentTime + s)); a.currentTime = t; setCurrentTime(t) }
+
+  return <div className="podcast-player-bar">
+    <audio ref={audioRef} src={signedUrl} preload="metadata"/>
+    <div className="podcast-player-left">
+      <div className="podcast-player-thumb"><img src={cardCover(image)} alt=""/></div>
+      <div className="podcast-player-meta"><strong>{title}</strong><span>{audioError ? 'Não foi possível reproduzir o áudio. Feche e tente novamente.' : author}</span></div>
+    </div>
+    <div className="podcast-player-center">
+      <div className="podcast-player-btns">
+        <button onClick={() => skip(-15)} className="podcast-ctrl-btn" aria-label="-15s" disabled={audioError}><SkipBack size={18}/></button>
+        <button onClick={toggle} className="podcast-ctrl-play" aria-label={playing ? 'Pausar' : 'Reproduzir'} disabled={audioError}>
+          {playing ? <Pause size={22} fill="currentColor"/> : <Play size={22} fill="currentColor"/>}
+        </button>
+        <button onClick={() => skip(15)} className="podcast-ctrl-btn" aria-label="+15s" disabled={audioError}><SkipForward size={18}/></button>
+      </div>
+      <div className="podcast-player-progress">
+        <span>{formatPodcastTime(currentTime)}</span>
+        <input type="range" min={0} max={duration || 100} value={currentTime} onChange={seek} className="podcast-range" disabled={audioError}/>
+        <span>{formatPodcastTime(duration)}</span>
+      </div>
+    </div>
+    <div className="podcast-player-right">
+      <Volume2 size={16} className="podcast-vol-icon"/>
+      <input type="range" min={0} max={100} value={volume} onChange={changeVolume} className="podcast-range podcast-range--vol" disabled={audioError}/>
+      <button onClick={onClose} className="podcast-player-close" aria-label="Fechar"><X size={16}/></button>
+    </div>
+  </div>
+}
+
+function PodcastDetailPanel({ item, allItems, activeSlug, playing, onClose, onPlay }: { item: ContentArea; allItems: ContentArea[]; activeSlug: string | null; playing: boolean; onClose: () => void; onPlay: (item: ContentArea) => void }) {
   const nextItems = allItems.filter(i => i.slug !== item.slug)
   const authorName = item.author.replace('Com ', '')
   const authorPhoto = item.professorImage || getProfessorPhoto(authorName)
@@ -316,7 +365,7 @@ function PodcastDetailPanel({ item, allItems, onClose, onPlay }: { item: Content
       </div>
       <div className="pd-body">
         <p className="pd-desc">{item.description}</p>
-        <button type="button" className="pd-play-btn" onClick={() => onPlay(item)}><Play size={16} fill="currentColor"/> Reproduzir</button>
+        <button type="button" className="pd-play-btn" onClick={() => onPlay(item)} aria-label={activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}>{activeSlug === item.slug && playing ? <Pause size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>} {activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}</button>
         <div className="pd-section">
           <div className="pd-section-head"><span>Créditos</span><button type="button">Mostrar tudo</button></div>
           <div className="pd-credit-card">
@@ -332,7 +381,7 @@ function PodcastDetailPanel({ item, allItems, onClose, onPlay }: { item: Content
           {nextItems.map(next => <div className="pd-next-item" key={next.slug}>
             <div className="pd-next-thumb">
               <img src={cardCover(next.image)} alt=""/>
-              <button type="button" className="pd-next-play" aria-label={`Reproduzir ${next.title}`} onClick={() => onPlay(next)}><Play size={15} fill="currentColor"/></button>
+              <button type="button" className="pd-next-play" aria-label={activeSlug === next.slug && playing ? `Pausar ${next.title}` : `Reproduzir ${next.title}`} onClick={() => onPlay(next)}>{activeSlug === next.slug && playing ? <Pause size={15} fill="currentColor"/> : <Play size={15} fill="currentColor"/>}</button>
             </div>
             <div className="pd-next-info">
               <strong>{next.title}</strong>
@@ -345,11 +394,16 @@ function PodcastDetailPanel({ item, allItems, onClose, onPlay }: { item: Content
 }
 
 function PodcastsPage() {
-  const { courses: podcastLibrary } = useLibraryCourses()
+  const { courses: podcastLibrary, loading: podcastsLoading } = useLibraryCourses()
   const items = podcastLibrary.filter(item => item.category === 'Podcasts')
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedPodcastSlug = searchParams.get('podcast')
-  const [activeSpotify, setActiveSpotify] = useState<{url: string; title: string; author: string; image?: string} | null>(null)
+  type ActivePodcastPlayer =
+    | { kind: 'youtube'; slug: string; url: string; title: string; author: string; image?: string }
+    | { kind: 'native'; slug: string; signedUrl: string; title: string; author: string; image?: string }
+  const [activePlayer, setActivePlayer] = useState<ActivePodcastPlayer | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playerLoading, setPlayerLoading] = useState<string | null>(null)
   const [detailItem, setDetailItem] = useState<ContentArea | null>(null)
 
   useEffect(() => { loadYT().catch(() => {}) }, [])
@@ -365,6 +419,28 @@ function PodcastsPage() {
     nextParams.set('podcast', item.slug)
     setSearchParams(nextParams)
   }
+  const togglePodcast = async (podcast: ContentArea) => {
+    if (activePlayer?.slug === podcast.slug) { setIsPlaying(current => !current); openPodcast(podcast); return }
+    if (podcast.audioPath && supabase) {
+      setPlayerLoading(podcast.slug)
+      try {
+        const { data } = await supabase.storage.from('podcast-audio').createSignedUrl(podcast.audioPath, 3600)
+        if (data?.signedUrl) {
+          setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: data.signedUrl, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
+          setIsPlaying(true)
+          openPodcast(podcast)
+          return
+        }
+      } catch { /* fallback to YouTube */ }
+      finally { setPlayerLoading(null) }
+    }
+    const url = podcast.spotifyUrl || podcast.videoUrl || courseVideoUrls[podcast.slug]
+    if (!url) return
+    setActivePlayer({ kind: 'youtube', slug: podcast.slug, url, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
+    setIsPlaying(true)
+    openPodcast(podcast)
+  }
+
   const closePodcast = () => {
     setDetailItem(null)
     const nextParams = new URLSearchParams(searchParams)
@@ -398,15 +474,15 @@ function PodcastsPage() {
           <div className="ms-hero-search"><SearchHeader /></div>
         </div>
         <div className="podcast-filters">
-          {['Todos','Mentalidade','Negócios','Crescimento','Estratégia','Empreendedorismo'].map(f => <span key={f} className={f === 'Todos' ? 'active' : ''}>{f}</span>)}
+          {['Todos','Mentalidade','Negócios','Crescimento','Estratégia','Empreendedorismo'].map(f => <button type="button" key={f} className={f === 'Todos' ? 'active' : ''}>{f}</button>)}
         </div>
       </div>
       <div className="podcast-list">
         {items.map(item => (
           <article className="podcast-item" key={item.slug} onClick={() => openPodcast(item)} style={{cursor:'pointer'}}>
-            <button type="button" className="podcast-thumb" onClick={e => { e.stopPropagation(); openPodcast(item) }}>
-              <img src={cardCover(item.image)} alt=""/>
-              <span className="podcast-thumb-play"><Play size={20} fill="currentColor"/></span>
+            <button type="button" className={`podcast-thumb${podcastsLoading ? ' podcast-thumb--loading' : ''}`} aria-label={activePlayer?.slug === item.slug && isPlaying ? `Pausar ${item.title}` : `Reproduzir ${item.title}`} onClick={e => { e.stopPropagation(); void togglePodcast(item) }}>
+              <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
+              <span className="podcast-thumb-play">{playerLoading === item.slug ? <LoaderCircle size={20} className="podcast-play-spinner"/> : activePlayer?.slug === item.slug && isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}</span>
             </button>
             <div className="podcast-info">
               <div className="podcast-title-row">
@@ -418,18 +494,19 @@ function PodcastsPage() {
               <div className="podcast-meta"><span>Em breve</span></div>
             </div>
             <div className="podcast-actions" onClick={e => e.stopPropagation()}>
-              <span className="podcast-add" aria-hidden="true"><Plus size={22}/></span>
-              <button type="button" className="podcast-play" aria-label="Reproduzir" onClick={() => { const url = item.spotifyUrl || item.videoUrl || courseVideoUrls[item.slug]; if (url) { setActiveSpotify({url, title: item.title, author: item.author.replace('Com ',''), image: item.image}); openPodcast(item) } }}><Play size={20} fill="currentColor"/></button>
-              <span className="podcast-more" aria-hidden="true"><MoreVertical size={20}/></span>
+              <button type="button" className="podcast-add" aria-label="Adicionar"><Plus size={22}/></button>
+              <button type="button" className="podcast-play" aria-label={activePlayer?.slug === item.slug && isPlaying ? `Pausar ${item.title}` : `Reproduzir ${item.title}`} onClick={() => void togglePodcast(item)}>{playerLoading === item.slug ? <LoaderCircle size={20} className="podcast-play-spinner"/> : activePlayer?.slug === item.slug && isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}</button>
+              <button type="button" className="podcast-more" aria-label="Mais opções"><MoreVertical size={20}/></button>
             </div>
           </article>
         ))}
       </div>
     </section>
 
-    {activeSpotify && <PodcastAudioPlayer videoId={getYouTubeId(activeSpotify.url)!} title={activeSpotify.title} author={activeSpotify.author} image={activeSpotify.image} onClose={() => setActiveSpotify(null)}/>}
+    {activePlayer?.kind === 'native' && <NativePodcastPlayer key={activePlayer.slug} signedUrl={activePlayer.signedUrl} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
+    {activePlayer?.kind === 'youtube' && <PodcastAudioPlayer videoId={getYouTubeId(activePlayer.url)!} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
   </div></main></div>
-  {detailItem && <PodcastDetailPanel item={detailItem} allItems={items} onClose={closePodcast} onPlay={podcast => { const url = podcast.spotifyUrl || podcast.videoUrl || courseVideoUrls[podcast.slug]; if (url) setActiveSpotify({url, title: podcast.title, author: podcast.author.replace('Com ',''), image: podcast.image}) }}/>} 
+  {detailItem && <PodcastDetailPanel item={detailItem} allItems={items} activeSlug={activePlayer?.slug ?? null} playing={isPlaying} onClose={closePodcast} onPlay={(item) => { void togglePodcast(item) }}/>}
   </div>
 }
 
@@ -464,9 +541,9 @@ function CourseNotes({ slug }: { slug: string }) {
   }
 
   return <section className="watch-notes" aria-labelledby="watch-notes-heading">
-    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notas…' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
+    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notasâ€¦' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
     <textarea id="course-notes" aria-label="Anotações deste curso" value={notes} onChange={e => { setNotes(e.target.value); setMessage('') }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void saveNotes() } }} placeholder="Anote ideias, aprendizados e próximos passos deste curso..." disabled={loading}/>
-    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvando…' : 'Salvar nota'}</button></div>
+    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvandoâ€¦' : 'Salvar nota'}</button></div>
   </section>
 }
 
@@ -488,16 +565,6 @@ function WatchPage() {
   const [lessons, setLessons] = useState<WatchLesson[]>([])
   const [currentLessonId, setCurrentLessonId] = useState<string | null>(null)
 
-  // Reset lessons and player when navigating to a different course
-  const prevSlugRef = useRef<string | undefined>(undefined)
-  useEffect(() => {
-    if (prevSlugRef.current !== slug) {
-      prevSlugRef.current = slug
-      setLessons([])
-      setCurrentLessonId(null)
-    }
-  }, [slug])
-
   useEffect(() => {
     if (item?.category === 'Podcasts') return
     if (supabase && userId && item?.slug) void supabase.from('course_access_events').insert({ user_id: userId, course_slug: item.slug })
@@ -505,11 +572,11 @@ function WatchPage() {
 
   useEffect(() => {
     const client = supabase
-    if (!client || !item?.slug || item.category === 'Podcasts') return
-    let active = true
-    // Clear previous course state immediately before async load
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLessons([])
     setCurrentLessonId(null)
+    if (!client || !item?.slug || item.category === 'Podcasts') return
+    let active = true
     const loadLessons = async () => {
       const { data: courseRow } = await client.from('courses').select('id').eq('slug', item.slug).maybeSingle()
       if (!active || !courseRow) return
@@ -546,7 +613,7 @@ function WatchPage() {
         <div className="watch-stage">
           <div className="watch-video-col">
             {currentLesson
-              ? <YouTubeLessonPlayer key={currentLesson.id} courseSlug={item.slug} lessonId={currentLesson.id} videoUrl={currentLesson.videoUrl}/>
+              ? <YouTubeLessonPlayer courseSlug={item.slug} lessonId={currentLesson.id} videoUrl={currentLesson.videoUrl}/>
               : legacyEmbedUrl
                 ? <iframe className="watch-player" src={legacyEmbedUrl} title={`Aula de ${item.title}`} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen/>
                 : <div className="watch-player watch-player-placeholder"><div className="watch-play-icon"><Play size={25} fill="currentColor"/></div><span className="eyebrow">PLAYER DO CURSO</span><h2>O vídeo será adicionado em breve</h2><p>O link oficial deste curso ainda não foi fornecido.</p></div>
@@ -554,31 +621,39 @@ function WatchPage() {
           </div>
           <div className="watch-playlist">
             <div className="watch-playlist-header">
-              <p className="eyebrow">CONTEÚDO DO CURSO</p>
-              <h3>{item.title}</h3>
+              <div className="watch-playlist-header-cover" style={{ backgroundImage: `url(${cardCover(item.image)})` }}/>
+              <div className="watch-playlist-header-content">
+                <p className="watch-playlist-eyebrow">CONTEÚDO DO CURSO</p>
+                <h3>{item.title}</h3>
+                <span className="watch-playlist-count">{lessons.length > 0 ? `${lessons.length} aula${lessons.length !== 1 ? 's' : ''}` : `${libraryCourses.length} cursos`}</span>
+              </div>
             </div>
             <div className="watch-playlist-items">
               {lessons.length > 0
                 ? lessons.map((l, i) => (
                     <button key={l.id} type="button" className={`watch-playlist-item${l.id === currentLessonId ? ' watch-playlist-item--active' : ''}`} onClick={() => setCurrentLessonId(l.id)}>
-                      <span className="watch-playlist-num">{String(i + 1).padStart(2, '0')}</span>
+                      {l.id === currentLessonId
+                        ? <span className="watch-playlist-num watch-playlist-num--playing"><span/><span/><span/></span>
+                        : <span className="watch-playlist-num">{String(i + 1).padStart(2, '0')}</span>}
                       <div className="watch-playlist-info">
                         <span className="watch-playlist-title">{l.title}</span>
                         {l.durationSeconds > 0 && <span className="watch-playlist-dur">{formatWatchDuration(l.durationSeconds)}</span>}
                       </div>
-                      {l.id === currentLessonId && <Play size={13} fill="currentColor" className="watch-playlist-playing"/>}
-                      {l.id !== currentLessonId && <ChevronRight size={14} className="watch-playlist-chevron"/>}
+                      {l.id !== currentLessonId && <span className="watch-playlist-play-btn"><Play size={12} fill="currentColor"/></span>}
                     </button>
                   ))
                 : libraryCourses.map((c, i) => (
-                    <Link key={c.slug} to={`/assistir/${c.slug}`} className={`watch-playlist-item${c.slug === slug ? ' watch-playlist-item--active' : ''}`}>
-                      <span className="watch-playlist-num">{String(i + 1).padStart(2, '0')}</span>
+                    <Link key={c.slug} to={`/assistir/${c.slug}`} className={`watch-playlist-item watch-playlist-item--card${c.slug === slug ? ' watch-playlist-item--active' : ''}`}>
+                      <div className="watch-playlist-thumb">
+                        <img src={cardCover(c.image)} alt=""/>
+                        {c.slug === slug
+                          ? <div className="watch-playlist-thumb-active"><span/><span/><span/></div>
+                          : <span className="watch-playlist-thumb-n">{String(i + 1).padStart(2, '0')}</span>}
+                      </div>
                       <div className="watch-playlist-info">
                         <span className="watch-playlist-category">{c.category}</span>
                         <span className="watch-playlist-title">{c.title}</span>
                       </div>
-                      {c.slug === slug && <Play size={13} fill="currentColor" className="watch-playlist-playing"/>}
-                      {c.slug !== slug && <ChevronRight size={14} className="watch-playlist-chevron"/>}
                     </Link>
                   ))
               }
@@ -711,18 +786,42 @@ function InterviewsPage() {
   </div></main></div>
   </div>
 }
-const zoomCategories = [
-  { name: 'Vendas', count: 24, color: '#3b82f6' },
-  { name: 'Marketing', count: 18, color: '#8b5cf6' },
-  { name: 'Gestão e Operação', count: 16, color: '#06b6d4' },
-  { name: 'Planejamento', count: 15, color: '#f59e0b' },
-  { name: 'Produtividade', count: 14, color: '#10b981' },
-  { name: 'Mentalidade', count: 12, color: '#ec4899' },
-  { name: 'Finanças', count: 10, color: '#ef4444' },
-  { name: 'Perguntas e Respostas', count: 8, color: '#6366f1' },
-]
+const zoomCategoryColors: Record<string, string> = {
+  'vendas': '#3b82f6',
+  'marketing': '#8b5cf6',
+  'gestão e operação': '#06b6d4',
+  'planejamento': '#f59e0b',
+  'produtividade': '#10b981',
+  'mentalidade': '#ec4899',
+  'finanças': '#ef4444',
+  'perguntas e respostas': '#6366f1',
+}
+function parseDurationToMinutes(text: string): number {
+  const h = Number(text.match(/(\d+)h/)?.[1] ?? 0)
+  const m = Number(text.match(/(\d+)min/)?.[1] ?? 0)
+  return h * 60 + m
+}
+
 function ZoomPage() {
   const { recordings } = useZoomRecordings()
+  const categoryCounts = new Map<string, { name: string; count: number }>()
+  recordings.forEach(recording => {
+    const name = recording.category.trim()
+    if (!name) return
+    const key = name.toLocaleLowerCase('pt-BR')
+    const current = categoryCounts.get(key)
+    if (current) current.count += 1
+    else categoryCounts.set(key, { name, count: 1 })
+  })
+  const zoomCategories = Array.from(categoryCounts.values()).map(category => ({
+    ...category,
+    color: zoomCategoryColors[category.name.toLocaleLowerCase('pt-BR')] ?? '#64748b',
+  }))
+  const totalMinutes = recordings.reduce((sum, r) => sum + parseDurationToMinutes(r.duration), 0)
+  const totalHoursLabel = totalMinutes >= 60
+    ? `${Math.floor(totalMinutes / 60)}h${totalMinutes % 60 > 0 ? ` ${totalMinutes % 60}min` : ''}`
+    : totalMinutes > 0 ? `${totalMinutes}min` : '—'
+
   const [filter, setFilter] = useState('Todos')
   const [search, setSearch] = useState('')
   const zoomGridRef = useRef<HTMLDivElement>(null)
@@ -764,9 +863,9 @@ function ZoomPage() {
                 <p className="zoom-hero-desc">Aulas e encontros gravados para rever os principais temas ao seu ritmo.</p>
                 <a href="#gravacoes" className="zoom-cta"><Play size={13}/> Ver gravações <ArrowRight size={13}/></a>
                 <div className="zoom-stats">
-                  <div className="zoom-stat"><Video size={18}/><div><strong>127</strong><span>replays disponíveis</span></div></div>
-                  <div className="zoom-stat"><Clock size={18}/><div><strong>206h</strong><span>de conteúdo gravado</span></div></div>
-                  <div className="zoom-stat"><LayoutGrid size={18}/><div><strong>8</strong><span>categorias de temas</span></div></div>
+                  <div className="zoom-stat"><Video size={18}/><div><strong>{recordings.length}</strong><span>replays disponíveis</span></div></div>
+                  <div className="zoom-stat"><Clock size={18}/><div><strong>{totalHoursLabel}</strong><span>de conteúdo gravado</span></div></div>
+                  <div className="zoom-stat"><LayoutGrid size={18}/><div><strong>{zoomCategories.length}</strong><span>categorias de temas</span></div></div>
                 </div>
               </div>
               <div className="zoom-hero-img" style={{ backgroundImage: `url(${img('/images/zoom-page-banner.png')})` }}/>
@@ -792,7 +891,7 @@ function ZoomPage() {
                   <div className="zoom-filter-pills">
                     {zoomFilters.map(f => <button key={f} type="button" className={`zoom-pill${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>{f}</button>)}
                   </div>
-                  <span className="zoom-sort-btn"><SlidersHorizontal size={13}/> Mais recentes</span>
+                  <button type="button" className="zoom-sort-btn"><SlidersHorizontal size={13}/> Mais recentes <ChevronDown size={12}/></button>
                 </div>
 
                 <div className="zoom-list" ref={zoomGridRef}>
@@ -821,7 +920,7 @@ function ZoomPage() {
                 <div className="zoom-latest">
                   <div className="zoom-latest-header">
                     <span className="zoom-sidebar-label"><Clock size={14}/> Últimas adicionadas</span>
-                    <Link to="/gravacoes-zoom" className="zoom-ver-todas">Ver todas <ArrowRight size={12}/></Link>
+                    
                   </div>
                   {recordings.slice(0, 3).map(r => (
                     <Link key={r.id} to={`/gravacoes-zoom/${r.id}`} className="zoom-latest-card">
@@ -896,13 +995,13 @@ function BlogPage() {
   const [featured, ...rest] = filtered
   const sideArticles = rest.slice(0, 4)
   const moreArticles = filtered.slice(5)
-  const moreSmall = moreArticles.slice(0, 4)
+  const moreSmall = moreArticles.slice(0, Math.min(moreArticles.length - 1, 4))
   const moreFeatured = moreArticles.length > 0 ? moreArticles[moreArticles.length - 1] : undefined
 
   return <div className="app-shell app-shell--home">
     <Sidebar />
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page"><div className="home-content">
-    <section className="ms-hero blog-hero" style={{ backgroundImage: `url(${img('/images/blog-page-banner.png')})` }}>
+    <section className="ms-hero blog-hero" style={{ backgroundImage: `url(${img('/images/bg-blog.png')})` }}>
       <div className="ms-hero-shade" aria-hidden="true"/>
       <div className="ms-hero-content">
         <div className="ms-hero-copy">
@@ -921,7 +1020,7 @@ function BlogPage() {
       <div className="iv-search blog-search"><Search size={15}/><input type="text" placeholder="Pesquisar artigos..." value={search} onChange={e => setSearch(e.target.value)}/></div>
     </div>
 
-    {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigos…</div>}
+    {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigosâ€¦</div>}
     {!loading && !featured && <div style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a',fontSize:15}}>Nenhum artigo encontrado.</div>}
     {!loading && featured && <div className="blog-grid">
       <Link to={`/blog/${featured.slug}`} className="blog-card blog-card--featured">
@@ -958,37 +1057,54 @@ function BlogPage() {
 
     {!loading && moreArticles.length > 0 && <section className="blog-more">
       <div className="blog-more-heading"><h2>Mais artigos</h2><Link to="/blog" className="blog-ver-todos">Ver todos <ArrowRight size={14}/></Link></div>
-      <div className="blog-more-row">
-        <div className="blog-more-small-grid">
-          {moreSmall.map(a => <Link to={`/blog/${a.slug}`} className="blog-card" key={a.slug}>
-            <div className="blog-card-img blog-card-img--sm" style={{ backgroundImage: `url(${a.image})` }}>
-              <span className="blog-cat-tag blog-cat-tag--sm">{a.category.toUpperCase()}</span>
+      {moreArticles.length >= 4
+        ? <div className="blog-more-row">
+            <div className="blog-more-small-grid">
+              {moreSmall.map(a => <Link to={`/blog/${a.slug}`} className="blog-card" key={a.slug}>
+                <div className="blog-card-img blog-card-img--sm" style={{ backgroundImage: `url(${a.image})` }}>
+                  <span className="blog-cat-tag blog-cat-tag--sm">{a.category.toUpperCase()}</span>
+                </div>
+                <div className="blog-card-body blog-card-body--sm">
+                  <h3 className="blog-card-title">{a.title}</h3>
+                  <div className="blog-article-meta">
+                    <span><Calendar size={12}/> {a.date}</span>
+                    <span className="blog-meta-sep"/>
+                    <span><Clock size={12}/> {a.readTime}</span>
+                  </div>
+                </div>
+              </Link>)}
             </div>
-            <div className="blog-card-body blog-card-body--sm">
-              <h3 className="blog-card-title">{a.title}</h3>
-              <div className="blog-article-meta">
-                <span><Calendar size={12}/> {a.date}</span>
-                <span className="blog-meta-sep"/>
-                <span><Clock size={12}/> {a.readTime}</span>
+            {moreFeatured && <Link to={`/blog/${moreFeatured.slug}`} className="blog-card blog-card--featured">
+              <div className="blog-card-img" style={{ backgroundImage: `url(${moreFeatured.image})`, height: '520px' }}>
+                <span className="blog-cat-tag">{moreFeatured.category.toUpperCase()}</span>
               </div>
-            </div>
-          </Link>)}
-        </div>
-        {moreFeatured && <Link to={`/blog/${moreFeatured.slug}`} className="blog-card blog-card--featured">
-          <div className="blog-card-img" style={{ backgroundImage: `url(${moreFeatured.image})`, height: '520px' }}>
-            <span className="blog-cat-tag">{moreFeatured.category.toUpperCase()}</span>
+              <div className="blog-card-body">
+                <h2 className="blog-card-title blog-card-title--lg">{moreFeatured.title}</h2>
+                {moreFeatured.excerpt && <p className="blog-card-desc">{moreFeatured.excerpt}</p>}
+                <div className="blog-article-meta">
+                  <span><Calendar size={13}/> {moreFeatured.date}</span>
+                  <span className="blog-meta-sep"/>
+                  <span><Clock size={13}/> {moreFeatured.readTime}</span>
+                </div>
+              </div>
+            </Link>}
           </div>
-          <div className="blog-card-body">
-            <h2 className="blog-card-title blog-card-title--lg">{moreFeatured.title}</h2>
-            {moreFeatured.excerpt && <p className="blog-card-desc">{moreFeatured.excerpt}</p>}
-            <div className="blog-article-meta">
-              <span><Calendar size={13}/> {moreFeatured.date}</span>
-              <span className="blog-meta-sep"/>
-              <span><Clock size={13}/> {moreFeatured.readTime}</span>
-            </div>
+        : <div className={`blog-more-compact${moreArticles.length === 1 ? ' blog-more-compact--single' : ''}`}>
+            {moreArticles.map(a => <Link to={`/blog/${a.slug}`} className="blog-card" key={a.slug}>
+              <div className="blog-card-img blog-card-img--sm" style={{ backgroundImage: `url(${a.image})` }}>
+                <span className="blog-cat-tag blog-cat-tag--sm">{a.category.toUpperCase()}</span>
+              </div>
+              <div className="blog-card-body blog-card-body--sm">
+                <h3 className="blog-card-title">{a.title}</h3>
+                <div className="blog-article-meta">
+                  <span><Calendar size={12}/> {a.date}</span>
+                  <span className="blog-meta-sep"/>
+                  <span><Clock size={12}/> {a.readTime}</span>
+                </div>
+              </div>
+            </Link>)}
           </div>
-        </Link>}
-      </div>
+      }
     </section>}
   </div></main></div>
   </div>
@@ -998,28 +1114,21 @@ function BlogArticlePage() {
   const { article, loading } = useArticle(slug)
   const { articles } = useArticles()
   const related = articles.filter(a => a.slug !== slug).slice(0, 3)
-  const [copied, setCopied] = useState(false)
+  const [focusMode, setFocusMode] = useState(false)
+  const [lightMode, setLightMode] = useState(false)
+  const safeContent = useMemo(() => sanitizeHtml(article?.content ?? ''), [article?.content])
 
-  function copyLink() {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    })
-  }
-
-  function shareLinkedIn() {
-    window.open('https://www.linkedin.com/sharing/share-offsite/?url=' + encodeURIComponent(window.location.href), '_blank')
-  }
-
-  function shareTwitter() {
-    const text = article?.title ?? ''
-    window.open('https://twitter.com/intent/tweet?url=' + encodeURIComponent(window.location.href) + '&text=' + encodeURIComponent(text), '_blank')
-  }
+  useEffect(() => {
+    if (!focusMode) return
+    const exitOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setFocusMode(false) }
+    document.addEventListener('keydown', exitOnEscape)
+    return () => document.removeEventListener('keydown', exitOnEscape)
+  }, [focusMode])
 
   if (loading) return (
     <div className="app-shell app-shell--home"><Sidebar/>
       <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page">
-        <div className="screen-loader" style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigo…</div>
+        <div className="screen-loader" style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigoâ€¦</div>
       </main></div>
     </div>
   )
@@ -1032,10 +1141,9 @@ function BlogArticlePage() {
     </div>
   )
 
-  return <div className="app-shell app-shell--home">
+  return <div className={`app-shell app-shell--home${focusMode ? ' blog-focus-mode' : ''}${lightMode ? ' blog-light-mode' : ''}`}>
     <Sidebar/>
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page"><div className="home-content"><div className="ba-wrap">
-
       {/* Hero */}
       <div className="ba-hero">
         <div className="ba-hero-text">
@@ -1065,13 +1173,11 @@ function BlogArticlePage() {
       {/* Body */}
       <div className="ba-layout">
         <aside className="ba-share">
-          <button type="button" className="ba-share-btn" title="Compartilhar no LinkedIn" onClick={shareLinkedIn}><Linkedin size={16}/></button>
-          <button type="button" className="ba-share-btn" title="Compartilhar no Twitter/X" onClick={shareTwitter}><Twitter size={16}/></button>
-          <button type="button" className="ba-share-btn" title={copied ? 'Link copiado!' : 'Copiar link'} onClick={copyLink} style={copied ? {borderColor:'rgba(29,199,100,.4)',color:'#1dc764'} : undefined}>{copied ? <Check size={16}/> : <Link2 size={16}/>}</button>
-          <span className="ba-share-btn" title="Salvar" style={{opacity:0.4,cursor:'default'}} aria-hidden="true"><Bookmark size={16}/></span>
+          <button type="button" className="ba-share-btn ba-focus-toggle" onClick={() => setFocusMode(enabled => !enabled)} aria-pressed={focusMode} aria-label={focusMode ? 'Sair do modo foco' : 'Ativar modo foco'} title={focusMode ? 'Sair do modo foco' : 'Ativar modo foco'}><ScanText size={16}/></button>
+          <button type="button" className="ba-share-btn ba-theme-toggle" onClick={() => setLightMode(light => !light)} aria-pressed={lightMode} aria-label={lightMode ? 'Ativar modo escuro' : 'Ativar modo claro'} title={lightMode ? 'Ativar modo escuro' : 'Ativar modo claro'}>{lightMode ? <Moon size={16}/> : <Sun size={16}/>}</button>
         </aside>
 
-        <article className="ba-content" dangerouslySetInnerHTML={{ __html: sanitizeHtml(article.content ?? '') }}/>
+        <article className="ba-content" dangerouslySetInnerHTML={{ __html: safeContent }}/>
       </div>
 
       {/* Relacionados */}
@@ -1103,8 +1209,8 @@ function NoticesPage() { return <Shell><PageContent><PageHero eyebrow="COMUNIDAD
 function InterviewWatchPage() {
   const { slug } = useParams()
   const { user } = useAuth()
-  const { interviews, loading: interviewsLoading } = useInterviews()
-  const current = interviews.find(iv => iv.slug === slug) ?? null
+  const { interviews } = useInterviews()
+  const current = interviews.find(iv => iv.slug === slug) ?? interviews[0]
   const related = interviews.filter(iv => iv.slug !== current?.slug)
 
   const [watched, setWatched] = useState(false)
@@ -1113,6 +1219,8 @@ function InterviewWatchPage() {
   const notesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWatched(false)
     if (!supabase || !user || !current) return
     let active = true
     supabase.from('lesson_progress').select('completed').eq('user_id', user.id).eq('course_slug', current.slug).maybeSingle()
@@ -1120,8 +1228,7 @@ function InterviewWatchPage() {
     return () => { active = false }
   }, [user, current?.slug])
 
-  if (interviewsLoading && !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar entrevista…</span></div></WatchShell>
-  if (!current) return <NotFound />
+  if (!current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar entrevistaâ€¦</span></div></WatchShell>
 
   const embedUrl = current.videoId ? `https://www.youtube-nocookie.com/embed/${current.videoId}?rel=0&controls=1&playsinline=1` : null
 
@@ -1201,11 +1308,13 @@ function ZoomWatchPage() {
   const { id } = useParams()
   const { user } = useAuth()
   const { recordings, loading } = useZoomRecordings()
-  const current = recordings.find(r => r.id === id) ?? null
+  const current = recordings.find(r => r.id === id) ?? (loading ? null : recordings[0])
   const related = recordings.filter(r => r.id !== current?.id)
   const [watched, setWatched] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWatched(false)
     if (!supabase || !user || !current) return
     let active = true
     supabase.from('lesson_progress').select('completed').eq('user_id', user.id).eq('course_slug', 'zoom-' + current.id).maybeSingle()
@@ -1213,8 +1322,7 @@ function ZoomWatchPage() {
     return () => { active = false }
   }, [user, current?.id])
 
-  if (loading && !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar gravação…</span></div></WatchShell>
-  if (!current) return <NotFound />
+  if (loading || !current) return <WatchShell><div className="screen-loader"><div className="loader-dot"/><span>A carregar gravação…</span></div></WatchShell>
 
   const embedUrl = current.videoUrl ? getYouTubeEmbedUrl(current.videoUrl) : null
 
@@ -1289,7 +1397,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
   if (user) return <Navigate to="/" replace />
   const submit = async (event: FormEvent) => { event.preventDefault(); setError(''); setLoading(true); const message = await signIn(identifier, password); setLoading(false); if (message) setError(message); else navigate('/') }
-  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADÊMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail ou usuário</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="text" autoComplete="username" placeholder="ericeenio ou nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
+  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADÊMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail ou usuário</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="text" autoComplete="username" placeholder="ericeenio ou nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrarâ€¦</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
 }
 
 function NotFound() { return <Shell><PageContent><div className="not-found"><span className="eyebrow">404 · PÁGINA NÃO ENCONTRADA</span><h1>Este caminho ainda<br/>não existe.</h1><ButtonLink to="/">Voltar ao início</ButtonLink></div></PageContent></Shell> }

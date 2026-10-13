@@ -1,20 +1,28 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, ArrowUpRight, BarChart2, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Eye, FileText, GraduationCap, Grid2X2, Hash, ImageIcon, ImagePlus, Info, LayoutDashboard, Lightbulb, Link2, LoaderCircle, LogOut, Mic2, Newspaper, Pencil, Plus, Save, Search, Sparkles, SpellCheck, Trash2, Type, User, Users, Video, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, BarChart2, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Eye, FileText, GraduationCap, Grid2X2, Hash, ImageIcon, ImagePlus, Info, LayoutDashboard, Lightbulb, Link2, ListVideo, LoaderCircle, LogOut, Mail, Mic2, Music, Newspaper, Pencil, Plus, Save, Search, Sparkles, SpellCheck, Trash2, Type, Upload, User, Users, Video, X } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAdminAuth } from '../auth/useAdminAuth'
-import { adminSupabase } from '../lib/supabase'
+import { adminSupabase, supabaseUrl } from '../lib/supabase'
 import { img } from '../lib/publicUrl'
 import { cardCover } from '../lib/cardCover'
 import { getProfessorPhoto } from '../lib/adminAuthors'
+import { areas } from '../data/content'
 import { AdminPodcastCatalog, Waveform } from './AdminPodcastCatalog'
 import { AdminHeroArtwork } from './AdminHeroArtwork'
 import { AdminSelect, type AdminSelectOption } from './AdminSelect'
 import { getYouTubeVideoId } from '../lib/youtube'
-import { correctText, generateArticle, type GenerateParams } from '../lib/groq'
-import { isReportableSystemError, reportSystemAlert, systemAlertTypeForError } from '../lib/monitoring'
+import { correctText, generateArticle, sortLessonsByAI, type GenerateParams } from '../lib/groq'
 
-type AdminSection = 'overview' | 'courses' | 'podcasts' | 'interviews' | 'blog' | 'zoom' | 'notices'
+async function readFnError(error: unknown, data: unknown, fallback: string): Promise<string> {
+  if (data && typeof data === 'object' && 'error' in (data as object)) return String((data as any).error)
+  if (error) {
+    try { const b = await (error as any)?.context?.json?.(); if (b?.error) return String(b.error) } catch {}
+  }
+  return fallback
+}
+
+type AdminSection = 'overview' | 'courses' | 'podcasts' | 'interviews' | 'blog' | 'zoom' | 'notices' | 'students'
 
 const adminSections: { id: AdminSection; label: string; Icon: typeof LayoutDashboard }[] = [
   { id: 'overview', label: 'Visão geral', Icon: LayoutDashboard },
@@ -24,6 +32,7 @@ const adminSections: { id: AdminSection; label: string; Icon: typeof LayoutDashb
   { id: 'blog', label: 'Blog e artigos', Icon: Newspaper },
   { id: 'zoom', label: 'Gravações do Zoom', Icon: Video },
   { id: 'notices', label: 'Canal de avisos', Icon: Bell },
+  { id: 'students', label: 'Alunos', Icon: GraduationCap },
 ]
 const sectionInfo: Record<AdminSection, { title: string; description: string; publicPath?: string }> = {
   overview: { title: 'Visão geral', description: 'Acompanhe os números e as novidades da Academia.' },
@@ -33,6 +42,7 @@ const sectionInfo: Record<AdminSection, { title: string; description: string; pu
   blog: { title: 'Blog e artigos', description: 'Acompanhe os artigos e conteúdos editoriais.', publicPath: '/blog' },
   zoom: { title: 'Gravações do Zoom', description: 'Acompanhe as gravações de aulas e encontros.', publicPath: '/gravacoes-zoom' },
   notices: { title: 'Canal de avisos', description: 'Acompanhe a página de novidades e avisos da comunidade.', publicPath: '/avisos' },
+  students: { title: 'Alunos', description: 'Gerencie os alunos cadastrados na Academia.' },
 }
 
 function AdminFeedback({ type, message, onClose, modal = false }: { type: 'success' | 'error'; message: string; onClose: () => void; modal?: boolean }) {
@@ -93,18 +103,23 @@ export type Course = {
   notes_enabled: boolean
   published_at: string | null
   scheduled_for: string | null
+  position: number | null
+  audio_path: string | null
   zoom_type?: string
   zoom_category?: string
+  interview_author?: string
   created_at: string
 }
 type CourseAccess = { id: string; user_id: string; course_slug: string; accessed_at: string }
 type LessonRow = { id: string; course_id: string; title: string; video_url: string; duration_seconds: number; position: number; cover_url: string | null }
+type StudentRow = { id: string; name: string; email: string; created_at: string }
 type LessonDraft = { id: string; title: string; videoUrl: string; durationSeconds: number; position: number; coverUrl: string }
+type PlaylistVideoItem = { videoId: string; title: string; videoUrl: string; durationSeconds: number }
 type ActiveLessonForm = { id: string; title: string; videoUrl: string; durationText: string; coverFile: File | null; coverPreview: string; isNew: boolean }
 type CourseDraft = {
   title: string; description: string; instructor: string; category: Course['category']
   videoUrl: string; body: string; status: 'draft' | 'published' | 'scheduled'; scheduledFor: string
-  coverUrl: string; file: File | null
+  position: string; coverUrl: string; file: File | null; audioFile: File | null; audioPath: string
   notesEnabled: boolean; lessonCount: string; durationText: string; level: Course['level']
   lessons: LessonDraft[]; removedLessonIds: string[]; articleCategory: string; interviewAuthor: string
   zoomType: string; zoomCategory: string
@@ -112,9 +127,33 @@ type CourseDraft = {
 
 const blankDraft: CourseDraft = {
   title: '', description: '', instructor: '', category: 'miniseries', videoUrl: '', body: '',
-  status: 'published', scheduledFor: '', coverUrl: '', file: null, notesEnabled: true, lessonCount: '', durationText: '',
+  status: 'published', scheduledFor: '', position: '', coverUrl: '', file: null, audioFile: null, audioPath: '', notesEnabled: true, lessonCount: '', durationText: '',
   level: null, lessons: [], removedLessonIds: [], articleCategory: 'Mentalidade', interviewAuthor: '',
   zoomType: 'Aula', zoomCategory: '',
+}
+
+function uploadAudioWithProgress(
+  baseUrl: string,
+  path: string,
+  file: File,
+  token: string,
+  onProgress: (pct: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const url = `${baseUrl}/storage/v1/object/podcast-audio/${encodeURIComponent(path).replace(/%2F/g, '/')}`
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', url)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('Content-Type', file.type || 'audio/mpeg')
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round(e.loaded / e.total * 100)) }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { resolve(); return }
+      try { const body = JSON.parse(xhr.responseText) as { message?: string; error?: string }; reject(new Error(body.message || body.error || `Erro ${xhr.status}`)) }
+      catch { reject(new Error(`Upload falhou com erro ${xhr.status}.`)) }
+    }
+    xhr.onerror = () => reject(new Error('Erro de conexão ao fazer upload do áudio.'))
+    xhr.send(file)
+  })
 }
 
 const defaultArticleCategories: AdminSelectOption[] = [
@@ -145,6 +184,8 @@ const sectionMeta: Partial<Record<AdminSection, { item: string; plural: string; 
   zoom:       { item: 'gravação',   plural: 'gravações',   eyebrow: 'GRAVAÇÕES',    titleLabel: 'Título da gravação',   authorLabel: 'Apresentador',   videoLabel: 'Link do vídeo' },
   blog:       { item: 'artigo',     plural: 'artigos',     eyebrow: 'BLOG',         titleLabel: 'Título do artigo',     authorLabel: 'Autor',          videoLabel: 'Link do vídeo' },
 }
+const areaImage: Record<string, string> = Object.fromEntries(areas.map(a => [a.slug, a.image]))
+
 const monthName = (date: Date) => new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', '')
 const dateLabel = (value: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(value))
 const slugify = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
@@ -273,7 +314,16 @@ export function AdminCoursesPage() {
   const [activeLessonForm, setActiveLessonForm] = useState<ActiveLessonForm | null>(null)
   const [lessonFormError, setLessonFormError] = useState('')
   const [lessonSaving, setLessonSaving] = useState(false)
+  const [playlistImportOpen, setPlaylistImportOpen] = useState(false)
+  const [playlistUrl, setPlaylistUrl] = useState('')
+  const [playlistFetching, setPlaylistFetching] = useState(false)
+  const [playlistItems, setPlaylistItems] = useState<PlaylistVideoItem[]>([])
+  const [playlistSelected, setPlaylistSelected] = useState<Set<string>>(new Set())
+  const [playlistError, setPlaylistError] = useState('')
+  const [audioUploadProgress, setAudioUploadProgress] = useState(0)
   const [aiCorrectLoading, setAiCorrectLoading] = useState(false)
+  const [aiSortLoading, setAiSortLoading] = useState(false)
+  const [aiSortDone, setAiSortDone] = useState(false)
   const [aiGenerateOpen, setAiGenerateOpen] = useState(false)
   const [aiGenerateLoading, setAiGenerateLoading] = useState(false)
   const [generateForm, setGenerateForm] = useState<GenerateParams>({ tema: '', conhecimento: '', tempoLeitura: '5' })
@@ -284,6 +334,23 @@ export function AdminCoursesPage() {
   const [newCategoryColor, setNewCategoryColor] = useState('#ec4899')
   const [categorySaving, setCategorySaving] = useState(false)
   const [categoryError, setCategoryError] = useState('')
+  const [students, setStudents] = useState<StudentRow[]>([])
+  const [studentSearch, setStudentSearch] = useState('')
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteName, setInviteName] = useState('')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
+  const [inviteError, setInviteError] = useState('')
+  const [inviteSuccess, setInviteSuccess] = useState('')
+  const [createOpen, setCreateOpen] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createEmail, setCreateEmail] = useState('')
+  const [createPassword, setCreatePassword] = useState('')
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createSuccess, setCreateSuccess] = useState('')
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   const loadDashboard = useCallback(async () => {
     const client = adminSupabase
@@ -295,27 +362,22 @@ export function AdminCoursesPage() {
       client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId),
       client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId).gte('created_at', monthStart.toISOString()).lt('created_at', nextMonth.toISOString()),
       client.from('courses').select('id', { count: 'exact', head: true }).eq('status', 'published'),
-      client.from('courses').select('id,slug,title,description,cover_url,instructor,category,video_url,body,notes_enabled,lesson_count,duration_text,level,status,published_at,scheduled_for,created_at').order('created_at', { ascending: false }),
-      client.from('course_access_events').select('id,user_id,course_slug,accessed_at').neq('user_id', userId).order('accessed_at', { ascending: false }).limit(8),
+      client.from('courses').select('id,slug,title,description,cover_url,instructor,category,video_url,body,notes_enabled,lesson_count,duration_text,level,status,published_at,scheduled_for,position,audio_path,created_at').order('created_at', { ascending: false }),
+      client.from('course_access_events').select('id,user_id,course_slug,accessed_at').order('accessed_at', { ascending: false }).limit(8),
     ])
     const monthRanges = Array.from({ length: 6 }, (_, index) => {
       const start = new Date(now.getFullYear(), now.getMonth() - 5 + index, 1)
       return { start, end: new Date(start.getFullYear(), start.getMonth() + 1, 1) }
     })
-    const monthlyVisitResults = await Promise.all(monthRanges.map(({ start, end }) => client.from('course_access_events').select('id', { count: 'exact', head: true }).neq('user_id', userId).gte('accessed_at', start.toISOString()).lt('accessed_at', end.toISOString())))
+    const monthlyVisitResults = await Promise.all(monthRanges.map(({ start, end }) => client.from('course_access_events').select('id', { count: 'exact', head: true }).gte('accessed_at', start.toISOString()).lt('accessed_at', end.toISOString())))
     const failed = [allStudents.error, newStudents.error, publishedCourses.error, courseRows.error, recentAccessRows.error, ...monthlyVisitResults.map(r => r.error)].find(Boolean)
-    const infrastructureErrors = [allStudents.error, newStudents.error, publishedCourses.error, courseRows.error, recentAccessRows.error, ...monthlyVisitResults.map(r => r.error)].filter(isReportableSystemError)
-    if (infrastructureErrors.length) {
-      const failure = infrastructureErrors[0]!
-      void reportSystemAlert({ type: systemAlertTypeForError(failure), message: failure.message, metadata: { component: 'AdminCoursesPage', operation: 'loadDashboard', code: failure.code }, client: adminSupabase })
-    }
     const visitCounts = monthlyVisitResults.map(result => result.count ?? 0)
     setMonthlyVisits(visitCounts)
     // Busca histórico de alunos por mês de forma não-fatal (pode falhar por RLS sem bloquear o dashboard)
     Promise.all(monthRanges.map(({ start, end }) => client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId).gte('created_at', start.toISOString()).lt('created_at', end.toISOString())))
       .then(results => { if (results.every(r => !r.error)) setMonthlyStudents(results.map(r => r.count ?? 0)) })
       .catch(() => { /* silencioso — sparklines ficam vazios */ })
-    setError(failed ? 'Não foi possível carregar alguns dados agora. Tente novamente em instantes.' : '')
+    setError(failed ? 'Não foi possível carregar todos os dados. Confira se a migration do painel foi aplicada.' : '')
     setStats({ students: allStudents.count ?? 0, newStudents: newStudents.count ?? 0, publishedCourses: publishedCourses.count ?? 0, visitsThisMonth: visitCounts[visitCounts.length - 1] ?? 0 })
     const [interviewRows, articleRows, zoomRows, categoryRows] = await Promise.all([
       client.from('interviews').select('id,slug,title,subtitle,guest,guest_role,author,cover_url,duration,video_id,published_at,status,scheduled_for,created_at').order('created_at', { ascending: false }),
@@ -323,17 +385,13 @@ export function AdminCoursesPage() {
       client.from('zoom_recordings').select('id,title,description,type,category,duration,thumb_url,video_url,recorded_at,status,scheduled_for').order('recorded_at', { ascending: false }),
       client.from('article_categories').select('name,color').order('name'),
     ])
-    for (const [table, result] of [['interviews', interviewRows], ['articles', articleRows], ['zoom_recordings', zoomRows], ['article_categories', categoryRows]] as const) {
-      if (result.error && isReportableSystemError(result.error)) void reportSystemAlert({ type: systemAlertTypeForError(result.error), message: result.error.message, metadata: { component: 'AdminCoursesPage', operation: 'loadDashboard', table, code: result.error.code }, client: adminSupabase })
-    }
-    if ([interviewRows.error, articleRows.error, zoomRows.error, categoryRows.error].some(Boolean)) setError('Não foi possível carregar alguns conteúdos agora. Tente novamente em instantes.')
     if (!categoryRows.error && categoryRows.data) {
       const customCategories = categoryRows.data.map(category => ({ value: category.name, label: category.name, color: category.color }))
       setArticleCategories([...defaultArticleCategories, ...customCategories.filter(category => !defaultArticleCategories.some(defaultCategory => defaultCategory.value.toLocaleLowerCase('pt-BR') === category.value.toLocaleLowerCase('pt-BR')))])
     }
-    const mappedInterviews: Course[] = (interviewRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.subtitle ?? '', cover_url: r.cover_url ?? '', instructor: r.guest ?? '', category: 'interview' as const, video_url: r.video_id ? `https://www.youtube.com/watch?v=${r.video_id}` : null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
-    const mappedArticles: Course[] = (articleRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.excerpt ?? '', cover_url: r.image_url ?? '', instructor: '', category: 'blog' as const, video_url: null, body: null, lesson_count: null, duration_text: r.read_time ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
-    const mappedZoom: Course[] = (zoomRows.data ?? []).map(r => ({ id: r.id, slug: r.id, title: r.title, description: r.description ?? '', cover_url: r.thumb_url ?? '', instructor: '', category: 'zoom_recording' as const, video_url: r.video_url ?? null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.recorded_at, scheduled_for: r.scheduled_for ?? null, zoom_type: r.type, zoom_category: r.category, created_at: r.recorded_at ?? new Date().toISOString() }))
+    const mappedInterviews: Course[] = (interviewRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.subtitle ?? '', cover_url: r.cover_url ?? '', instructor: r.guest ?? '', category: 'interview' as const, video_url: r.video_id ? `https://www.youtube.com/watch?v=${r.video_id}` : null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, position: null, audio_path: null, interview_author: r.author ?? undefined, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
+    const mappedArticles: Course[] = (articleRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.excerpt ?? '', cover_url: r.image_url ?? '', instructor: '', category: 'blog' as const, video_url: null, body: null, lesson_count: null, duration_text: r.read_time ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, position: null, audio_path: null, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
+    const mappedZoom: Course[] = (zoomRows.data ?? []).map(r => ({ id: r.id, slug: r.id, title: r.title, description: r.description ?? '', cover_url: r.thumb_url ?? '', instructor: '', category: 'zoom_recording' as const, video_url: r.video_url ?? null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.recorded_at, scheduled_for: r.scheduled_for ?? null, position: null, audio_path: null, zoom_type: r.type, zoom_category: r.category, created_at: r.recorded_at ?? new Date().toISOString() }))
     setCourses([...(courseRows.data ?? []) as Course[], ...mappedInterviews, ...mappedArticles, ...mappedZoom])
     const recentAccesses = (recentAccessRows.data ?? []) as CourseAccess[]
     setCourseAccesses(recentAccesses)
@@ -342,6 +400,8 @@ export function AdminCoursesPage() {
       const { data: recentProfiles } = await client.from('profiles').select('id,full_name,name').in('id', recentUserIds)
       setAccessNames(Object.fromEntries((recentProfiles ?? []).map(profile => [profile.id, profile.full_name || profile.name || 'Aluno da Academia'])))
     } else setAccessNames({})
+    const { data: studentRows } = await client.from('profiles').select('id,name,email,full_name,created_at').neq('id', userId).order('created_at', { ascending: false })
+    setStudents((studentRows ?? []).map(r => ({ id: r.id, name: r.full_name || r.name || 'Aluno da Academia', email: r.email ?? '', created_at: r.created_at })))
     setLoading(false)
   }, [userId])
 
@@ -382,6 +442,8 @@ export function AdminCoursesPage() {
     setNotice('')
     setActiveLessonForm(null)
     setLessonFormError('')
+    setAiSortDone(false)
+    setPlaylistImportOpen(false)
     setView('list')
   }, [section])
 
@@ -416,8 +478,7 @@ export function AdminCoursesPage() {
     const { data, error: insertError } = await adminSupabase.from('article_categories').insert({ name, slug, color: newCategoryColor }).select('name,color').single()
     setCategorySaving(false)
     if (insertError || !data) {
-      if (insertError && isReportableSystemError(insertError)) void reportSystemAlert({ type: systemAlertTypeForError(insertError), message: insertError.message, metadata: { component: 'AdminCoursesPage', operation: 'createCategory', table: 'article_categories', code: insertError.code }, client: adminSupabase })
-      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível salvar a categoria agora. Tente novamente.')
+      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível salvar. Confira se a migration de categorias do blog foi aplicada.')
       return
     }
     setArticleCategories(current => [...current, { value: data.name, label: data.name, color: data.color }])
@@ -436,6 +497,37 @@ export function AdminCoursesPage() {
     setLessonFormError('')
   }
   const cancelLessonForm = () => { setActiveLessonForm(null); setLessonFormError('') }
+
+  const openPlaylistImport = () => { setPlaylistImportOpen(true); setPlaylistUrl(''); setPlaylistItems([]); setPlaylistSelected(new Set()); setPlaylistError('') }
+  const closePlaylistImport = () => { setPlaylistImportOpen(false); setPlaylistUrl(''); setPlaylistItems([]); setPlaylistSelected(new Set()); setPlaylistError('') }
+  const fetchPlaylist = async () => {
+    if (!playlistUrl.trim() || playlistFetching || !adminSupabase) return
+    setPlaylistFetching(true); setPlaylistError(''); setPlaylistItems([])
+    const { data, error } = await adminSupabase.functions.invoke('youtube-playlist', { body: { playlist_url: playlistUrl.trim() } })
+    setPlaylistFetching(false)
+    if (error || !data?.videos) { setPlaylistError(await readFnError(error, data, 'Não foi possível buscar a playlist.')); return }
+    const items = data.videos as PlaylistVideoItem[]
+    setPlaylistItems(items)
+    setPlaylistSelected(new Set(items.map(v => v.videoId)))
+    if (data.playlist) {
+      const meta = data.playlist as { title: string; description: string }
+      setDraft(d => ({
+        ...d,
+        title: d.title.trim() ? d.title : meta.title,
+        description: d.description.trim() ? d.description : meta.description,
+      }))
+    }
+  }
+  const togglePlaylistItem = (videoId: string) => setPlaylistSelected(s => { const n = new Set(s); n.has(videoId) ? n.delete(videoId) : n.add(videoId); return n })
+  const importPlaylistLessons = () => {
+    const toAdd = playlistItems.filter(v => playlistSelected.has(v.videoId))
+    if (!toAdd.length) return
+    const extractNum = (title: string) => { const m = title.match(/\d+/g); return m ? parseInt(m[m.length - 1]) : 0 }
+    const sorted = [...toAdd].sort((a, b) => extractNum(a.title) - extractNum(b.title))
+    const startPos = draft.lessons.length
+    setDraft(d => ({ ...d, lessons: [...d.lessons, ...sorted.map((v, i) => ({ id: crypto.randomUUID(), title: v.title, videoUrl: v.videoUrl, durationSeconds: v.durationSeconds, position: startPos + i, coverUrl: `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg` }))] }))
+    closePlaylistImport()
+  }
   const setLessonVideoUrl = (url: string) => {
     setActiveLessonForm(f => {
       if (!f || f.coverFile) return f ? { ...f, videoUrl: url } : f
@@ -503,6 +595,20 @@ export function AdminCoursesPage() {
     })
   }
 
+  const errorMessage = (caught: unknown) => {
+    if (caught instanceof Error) return caught.message
+    if (typeof caught === 'string') return caught
+    if (caught && typeof caught === 'object') {
+      const backendError = caught as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+      if (backendError.code === '23505') return 'Já existe um conteúdo com esse título ou endereço na biblioteca. Altere o título e tente novamente.'
+      const parts = [backendError.message, backendError.details, backendError.hint]
+        .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+      if (parts.length) return parts.join(' ')
+      if (typeof backendError.code === 'string') return `Erro ${backendError.code} ao salvar o conteúdo.`
+    }
+    return `Não foi possível salvar ${sectionMeta[section]?.item ?? 'o conteúdo'}.`
+  }
+
   const saveCourse = async (event: FormEvent) => {
     event.preventDefault()
     if (!adminSupabase || !user || saving) return
@@ -518,10 +624,10 @@ export function AdminCoursesPage() {
       if (section === 'courses' && draft.status === 'published' && draft.lessons.length === 0) {
         throw new Error('Adicione pelo menos uma aula antes de publicar a minissérie.')
       }
-      if (draft.status === 'scheduled' && !draft.scheduledFor) throw new Error('Informe a data e hora para agendar a publicação.')
-      const scheduledFor = draft.status === 'scheduled' ? new Date(draft.scheduledFor).toISOString() : null
       const finalPublishedAt = (status: Course['status'], existing: Course | undefined) =>
         status === 'published' ? (existing?.published_at ?? new Date().toISOString()) : null
+      if (draft.status === 'scheduled' && !draft.scheduledFor) throw new Error('Informe uma data de agendamento antes de salvar.')
+      const scheduledFor = draft.status === 'scheduled' ? new Date(draft.scheduledFor).toISOString() : null
       let coverUrl = draft.coverUrl.trim()
       if (draft.file) {
         const safeName = draft.file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
@@ -529,6 +635,24 @@ export function AdminCoursesPage() {
         const { error: uploadError } = await adminSupabase.storage.from('course-covers').upload(path, draft.file, { upsert: false, contentType: draft.file.type })
         if (uploadError) throw uploadError
         coverUrl = adminSupabase.storage.from('course-covers').getPublicUrl(path).data.publicUrl
+      }
+      if (section === 'podcasts' && !draft.audioFile && !draft.audioPath.trim() && !draft.videoUrl.trim()) {
+        throw new Error('Adicione um ficheiro MP3 ou um link de YouTube antes de publicar o podcast.')
+      }
+      let finalAudioPath = draft.audioPath.trim()
+      if (section === 'podcasts' && draft.audioFile) {
+        const audioFile = draft.audioFile
+        if (audioFile.size > 31_457_280) throw new Error('O ficheiro de áudio não pode ter mais de 30 MB.')
+        if (!supabaseUrl) throw new Error('Supabase não configurado.')
+        const { data: sessionData } = await adminSupabase!.auth.getSession()
+        const token = sessionData?.session?.access_token
+        if (!token) throw new Error('Sessão administrativa expirada. Faça login novamente.')
+        const safeName = audioFile.name.replace(/[^a-zA-Z0-9._-]/g, '-')
+        const uploadPath = `${user.id}/${crypto.randomUUID()}-${safeName}`
+        setAudioUploadProgress(1)
+        await uploadAudioWithProgress(supabaseUrl, uploadPath, audioFile, token, setAudioUploadProgress)
+        setAudioUploadProgress(0)
+        finalAudioPath = uploadPath
       }
       if (!coverUrl && section !== 'interviews') throw new Error(`Adicione uma capa à ${sectionMeta[section]?.item ?? 'publicação'} antes de salvar.`)
       const slug = slugify(draft.title)
@@ -566,6 +690,8 @@ export function AdminCoursesPage() {
         created_by: user.id,
         published_at: finalPublishedAt(draft.status, existing),
         scheduled_for: scheduledFor,
+        position: draft.position.trim() ? parseInt(draft.position) || null : null,
+        ...(section === 'podcasts' ? { audio_path: finalAudioPath || null } : {}),
         updated_at: new Date().toISOString(),
       }
       if (editingId) {
@@ -590,6 +716,8 @@ export function AdminCoursesPage() {
       }
       const successMsg = draft.status === 'published'
         ? (section === 'courses' ? 'Minissérie publicada na biblioteca.' : 'Conteúdo publicado na biblioteca.')
+        : draft.status === 'scheduled'
+        ? 'Publicação agendada com sucesso.'
         : 'Rascunho salvo com sucesso.'
       // Fecha o modal e mostra o aviso em uma única renderização (sem chamar resetForm que limpa setNotice)
       setDraft({ ...blankDraft, category: sectionCategory[section] ?? 'miniseries', instructor: section === 'courses' ? PROFESSOR_OPTIONS[0].value : '' })
@@ -601,10 +729,9 @@ export function AdminCoursesPage() {
       setNotice(successMsg)
       await loadDashboard()
     } catch (caught) {
-      if (import.meta.env.DEV) console.error('Falha ao salvar conteúdo no painel administrativo.', caught)
-      if (isReportableSystemError(caught)) void reportSystemAlert({ type: systemAlertTypeForError(caught), message: caught instanceof Error ? caught.message : 'Falha ao salvar conteúdo', metadata: { component: 'AdminCoursesPage', operation: 'saveContent' }, client: adminSupabase })
-      setError('Não foi possível salvar o conteúdo agora. Verifique os dados e tente novamente.')
-    } finally { setSaving(false) }
+      console.error('Falha ao salvar conteúdo no painel administrativo:', caught)
+      setError(errorMessage(caught))
+    } finally { setSaving(false); setAudioUploadProgress(0) }
   }
 
   const editCourse = async (course: Course) => {
@@ -612,21 +739,20 @@ export function AdminCoursesPage() {
     let loadedLessons: LessonDraft[] = []
     let articleBody = ''
     if (adminSupabase && (course.category === 'course' || course.category === 'miniseries')) {
-      const { data, error: lessonsError } = await adminSupabase.from('lessons').select('id,title,video_url,duration_seconds,position,cover_url').eq('course_id', course.id).order('position')
-      if (lessonsError && isReportableSystemError(lessonsError)) void reportSystemAlert({ type: systemAlertTypeForError(lessonsError), message: lessonsError.message, metadata: { component: 'AdminCoursesPage', operation: 'editCourse', table: 'lessons', code: lessonsError.code }, client: adminSupabase })
+      const { data } = await adminSupabase.from('lessons').select('id,title,video_url,duration_seconds,position,cover_url').eq('course_id', course.id).order('position')
       loadedLessons = ((data ?? []) as LessonRow[]).map(l => ({ id: l.id, title: l.title, videoUrl: l.video_url, durationSeconds: l.duration_seconds, position: l.position, coverUrl: l.cover_url ?? '' }))
     }
     let articleCategory = 'Mentalidade'
     if (adminSupabase && course.category === 'blog') {
-      const { data, error: articleError } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
-      if (articleError && isReportableSystemError(articleError)) void reportSystemAlert({ type: systemAlertTypeForError(articleError), message: articleError.message, metadata: { component: 'AdminCoursesPage', operation: 'editArticle', table: 'articles', code: articleError.code }, client: adminSupabase })
+      const { data } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
       articleBody = data?.content ?? ''
       articleCategory = data?.category ?? 'Mentalidade'
     }
-    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', coverUrl: course.cover_url, file: null, notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
-    setPreviewUrl(img(course.cover_url))
+    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', position: course.position?.toString() ?? '', coverUrl: course.cover_url, file: null, audioFile: null, audioPath: course.audio_path ?? '', notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: course.interview_author ?? '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
+    setPreviewUrl(cardCover(course.cover_url || areaImage[course.slug]))
     setActiveLessonForm(null)
     setLessonFormError('')
+    setAiSortDone(false)
     setView('form')
   }
 
@@ -636,10 +762,7 @@ export function AdminCoursesPage() {
     const tableBySection: Partial<Record<AdminSection, string>> = { interviews: 'interviews', blog: 'articles', zoom: 'zoom_recordings' }
     const table = tableBySection[section] ?? 'courses'
     const { error: deleteError } = await adminSupabase.from(table).delete().eq('id', course.id)
-    if (deleteError) {
-      if (isReportableSystemError(deleteError)) void reportSystemAlert({ type: systemAlertTypeForError(deleteError), message: deleteError.message, metadata: { component: 'AdminCoursesPage', operation: 'delete', table, code: deleteError.code }, client: adminSupabase })
-      setError('Não foi possível excluir o conteúdo.')
-    }
+    if (deleteError) setError('Não foi possível excluir o conteúdo.')
     else { setNotice(`${course.title} foi excluído.`); await loadDashboard() }
   }
 
@@ -677,6 +800,51 @@ export function AdminCoursesPage() {
     }
   }
 
+  const createStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!adminSupabase || createLoading) return
+    setCreateLoading(true)
+    setCreateError('')
+    setCreateSuccess('')
+    const { data, error } = await adminSupabase.functions.invoke('admin-students', { body: { action: 'create', email: createEmail.trim().toLowerCase(), name: createName.trim(), password: createPassword } })
+    setCreateLoading(false)
+    if (error || data?.error) { setCreateError(await readFnError(error, data, 'Não foi possível criar o aluno.')); return }
+    setCreateSuccess(`Aluno ${createEmail.trim().toLowerCase()} criado com sucesso.`)
+    setCreateName('')
+    setCreateEmail('')
+    setCreatePassword('')
+    void loadDashboard()
+  }
+
+  const inviteStudent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!adminSupabase || inviteLoading) return
+    setInviteLoading(true)
+    setInviteError('')
+    setInviteSuccess('')
+    const { data, error } = await adminSupabase.functions.invoke('admin-students', { body: { action: 'invite', email: inviteEmail.trim().toLowerCase(), name: inviteName.trim() } })
+    setInviteLoading(false)
+    if (error || data?.error) {
+      setInviteError(await readFnError(error, data, 'Não foi possível convidar o aluno.'))
+      return
+    }
+    setInviteSuccess(`Convite enviado para ${inviteEmail.trim().toLowerCase()}.`)
+    setInviteName('')
+    setInviteEmail('')
+    void loadDashboard()
+  }
+
+  const deleteStudent = async (studentId: string) => {
+    if (!adminSupabase || deleteLoading) return
+    setDeleteLoading(true)
+    const { data, error } = await adminSupabase.functions.invoke('admin-students', { body: { action: 'delete', userId: studentId } })
+    setDeleteLoading(false)
+    setDeleteConfirmId(null)
+    if (error || data?.error) { setError(await readFnError(error, data, 'Não foi possível remover o aluno.')); return }
+    setStudents(prev => prev.filter(s => s.id !== studentId))
+    setStats(prev => ({ ...prev, students: Math.max(0, prev.students - 1) }))
+  }
+
   const changeSection = (nextSection: AdminSection) => {
     const cat = sectionCategory[nextSection]
     if (cat) setDraft(current => ({ ...current, category: cat }))
@@ -688,6 +856,8 @@ export function AdminCoursesPage() {
     setSortOrder('newest')
     setActiveLessonForm(null)
     setLessonFormError('')
+    setNotice('')
+    setError('')
   }
   if (!isAdmin) return <AdminShell section={section} onSectionChange={changeSection}><main className="page-content admin-denied"><span className="eyebrow">ÁREA RESTRITA</span><h1>Acesso administrativo</h1><p>Esta conta não está habilitada para gerir cursos.</p><Link className="button button-secondary" to="/"><ArrowLeft size={16}/> Voltar à Academia</Link><Link className="button button-secondary" to="/admin/login">Trocar de conta</Link></main></AdminShell>
 
@@ -751,10 +921,11 @@ export function AdminCoursesPage() {
           ? <div className="admin-course-grid">{filteredCourses.map(course => {
                 const publicUrl = section === 'blog' ? `/blog/${course.slug}` : `/assistir/${course.slug}`
                 return <article className="admin-course-row" key={course.id} onClick={() => void editCourse(course)} style={{ cursor: 'pointer' }}>
-                  <img src={cardCover(course.cover_url)} alt="" className="admin-course-row-img"/>
+                  <img src={cardCover(course.cover_url || areaImage[course.slug])} alt="" className="admin-course-row-img"/>
                   <div className="admin-course-row-info">
                     <strong className="admin-course-row-title">{course.title}</strong>
                     {section === 'courses' && <span className="admin-course-kind admin-course-kind--miniseries">Minissérie</span>}
+                    {section === 'courses' && course.position != null && <span className="admin-course-position">#{course.position}</span>}
                     {course.instructor && <span className="admin-course-row-author"><User size={13}/> {meta.authorLabel}: {course.instructor}</span>}
                   </div>
                   <div className="admin-course-row-meta">
@@ -830,7 +1001,25 @@ export function AdminCoursesPage() {
           {section === 'courses' && <div className="admin-form-card">
             <div className="admin-form-section-head">
               <div className="admin-form-section-left"><span className="admin-form-step">2</span><div><strong>Aulas</strong><span>Adicione as aulas do {meta.item} com os respectivos links do YouTube.</span></div></div>
-              <span className="admin-form-section-info"><Info size={13}/> Número de aulas e duração são calculados automaticamente.</span>
+              <div className="admin-form-section-actions">
+                {aiSortDone && <span className="admin-autosort-notice"><Check size={12}/> Ordenado — clique em Publicar para confirmar</span>}
+                {draft.lessons.length > 1 && <button type="button" className="admin-autosort-btn" disabled={aiSortLoading} onClick={() => { setAiSortDone(false)
+                  setAiSortLoading(true)
+                  sortLessonsByAI(draft.lessons.map(l => ({ id: l.id, title: l.title })))
+                    .then(orderedIds => {
+                      setDraft(c => {
+                        const byId = new Map(c.lessons.map(l => [l.id, l]))
+                        const sorted = orderedIds.map(id => byId.get(id)).filter(Boolean) as LessonDraft[]
+                        const remaining = c.lessons.filter(l => !orderedIds.includes(l.id))
+                        return { ...c, lessons: [...sorted, ...remaining] }
+                      })
+                      setAiSortDone(true)
+                    })
+                    .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Não foi possível ordenar as aulas com IA.'))
+                    .finally(() => setAiSortLoading(false))
+                }}>{aiSortLoading ? <><LoaderCircle size={13} className="admin-spinner"/> Ordenando…</> : <><Sparkles size={13}/> Ordenar com IA</>}</button>}
+                <span className="admin-form-section-info"><Info size={13}/> Número de aulas e duração são calculados automaticamente.</span>
+              </div>
             </div>
             {draft.lessons.length > 0 && <div className="admin-lessons-list">
               {draft.lessons.map((lesson, index) => (
@@ -898,16 +1087,107 @@ export function AdminCoursesPage() {
                 <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Adicionar aula</button>
               </div>
             </div>}
-            {!activeLessonForm && <button type="button" className="admin-add-lesson-btn" onClick={addNewLesson}><Plus size={14}/> Adicionar aula</button>}
+            {!activeLessonForm && !playlistImportOpen && (
+              <div className="admin-lesson-add-row">
+                <button type="button" className="admin-add-lesson-btn" onClick={addNewLesson}><Plus size={14}/> Adicionar aula</button>
+                <button type="button" className="admin-import-playlist-btn" onClick={openPlaylistImport}><ListVideo size={14}/> Importar playlist</button>
+              </div>
+            )}
+            {playlistImportOpen && (
+              <div className="admin-playlist-import">
+                <div className="admin-playlist-import-header">
+                  <ListVideo size={15}/>
+                  <strong>Importar playlist do YouTube</strong>
+                  <button type="button" className="admin-playlist-import-close" onClick={closePlaylistImport}><X size={14}/></button>
+                </div>
+                <div className="admin-playlist-url-row">
+                  <input
+                    type="url"
+                    className="admin-playlist-url-input"
+                    placeholder="https://www.youtube.com/playlist?list=..."
+                    value={playlistUrl}
+                    onChange={e => setPlaylistUrl(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && void fetchPlaylist()}
+                  />
+                  <button type="button" className="admin-playlist-fetch-btn" onClick={() => void fetchPlaylist()} disabled={!playlistUrl.trim() || playlistFetching}>
+                    {playlistFetching ? <LoaderCircle size={13} className="admin-spinner"/> : <Search size={13}/>} Buscar
+                  </button>
+                </div>
+                {playlistError && <p className="admin-playlist-error">{playlistError}</p>}
+                {playlistItems.length > 0 && <>
+                  <div className="admin-playlist-results-header">
+                    <span>{playlistItems.length} vídeo{playlistItems.length !== 1 ? 's' : ''} encontrado{playlistItems.length !== 1 ? 's' : ''}</span>
+                    <button type="button" className="admin-playlist-select-all" onClick={() => setPlaylistSelected(playlistSelected.size === playlistItems.length ? new Set() : new Set(playlistItems.map(v => v.videoId)))}>
+                      {playlistSelected.size === playlistItems.length ? 'Desmarcar todos' : 'Selecionar todos'}
+                    </button>
+                  </div>
+                  <div className="admin-playlist-list">
+                    {playlistItems.map((v, i) => (
+                      <label key={v.videoId} className={`admin-playlist-item${playlistSelected.has(v.videoId) ? ' admin-playlist-item--checked' : ''}`}>
+                        <input type="checkbox" checked={playlistSelected.has(v.videoId)} onChange={() => togglePlaylistItem(v.videoId)}/>
+                        <img src={`https://img.youtube.com/vi/${v.videoId}/default.jpg`} alt="" className="admin-playlist-thumb"/>
+                        <span className="admin-playlist-item-num">{i + 1}</span>
+                        <span className="admin-playlist-item-title">{v.title}</span>
+                        {v.durationSeconds > 0 && <span className="admin-playlist-item-dur"><Clock size={10}/> {formatDurationSeconds(v.durationSeconds)}</span>}
+                      </label>
+                    ))}
+                  </div>
+                  <div className="admin-playlist-import-actions">
+                    <button type="button" className="admin-lesson-cancel-btn" onClick={closePlaylistImport}>Cancelar</button>
+                    <button type="button" className="admin-lesson-confirm-btn" onClick={importPlaylistLessons} disabled={!playlistSelected.size}>
+                      <Check size={14}/> Importar {playlistSelected.size} aula{playlistSelected.size !== 1 ? 's' : ''}
+                    </button>
+                  </div>
+                </>}
+              </div>
+            )}
           </div>}
           {/* Seção 2 — Conteúdo (para não-blog não-courses) */}
           {section !== 'blog' && section !== 'courses' && <div className="admin-form-card">
             <div className="admin-form-section-head">
               <div className="admin-form-section-left"><span className="admin-form-step">2</span><div><strong>Conteúdo</strong><span>Configure o conteúdo e a estrutura do {meta.item}.</span></div></div>
             </div>
-            <label className="admin-field"><span>{meta.videoLabel}</span>
-              <div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={draft.videoUrl} onChange={e => setDraft(c => ({ ...c, videoUrl: e.target.value }))} placeholder="https://…" required className="admin-input-has-icon"/></div>
+            <label className="admin-field"><span>{meta.videoLabel}{section === 'podcasts' && <span className="admin-ai-optional"> (opcional se tiver MP3)</span>}</span>
+              <div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={draft.videoUrl} onChange={e => setDraft(c => ({ ...c, videoUrl: e.target.value }))} placeholder="https://…" required={section !== 'podcasts'} className="admin-input-has-icon"/></div>
             </label>
+            {section === 'podcasts' && (
+              <div className="admin-field">
+                <span>Ficheiro de áudio MP3 <span className="admin-ai-optional">(opcional se tiver link de YouTube)</span></span>
+                {draft.audioPath && !draft.audioFile && (
+                  <div className="admin-audio-current">
+                    <Music size={14}/><span>Áudio já enviado</span>
+                    <button type="button" className="admin-audio-remove-btn" onClick={() => setDraft(c => ({ ...c, audioPath: '' }))}><X size={12}/> Remover</button>
+                  </div>
+                )}
+                {(!draft.audioPath || draft.audioFile) && (
+                  <label className={`admin-audio-upload-area${draft.audioFile ? ' admin-audio-upload-area--selected' : ''}`}>
+                    <input type="file" accept="audio/mpeg,.mp3" onChange={e => {
+                      const f = e.target.files?.[0] ?? null
+                      if (!f) return
+                      if (f.size > 31_457_280) { setError('O ficheiro não pode ter mais de 30 MB.'); e.target.value = ''; return }
+                      setError('')
+                      setDraft(c => ({ ...c, audioFile: f }))
+                      e.target.value = ''
+                    }}/>
+                    {draft.audioFile ? (
+                      <div className="admin-audio-file-info">
+                        <Music size={18}/>
+                        <div><strong>{draft.audioFile.name}</strong><span>{(draft.audioFile.size / 1024 / 1024).toFixed(1)} MB</span></div>
+                        <button type="button" className="admin-audio-remove-btn admin-audio-remove-btn--inline" onClick={e => { e.preventDefault(); setDraft(c => ({ ...c, audioFile: null })) }}><X size={13}/></button>
+                      </div>
+                    ) : (
+                      <span className="admin-audio-placeholder"><Upload size={20}/><strong>Escolher MP3</strong><small>Máx. 30 MB · clique ou arraste</small></span>
+                    )}
+                  </label>
+                )}
+                {saving && audioUploadProgress > 0 && (
+                  <div className="admin-audio-progress-wrap">
+                    <div className="admin-audio-progress-bar"><div className="admin-audio-progress-fill" style={{ width: `${audioUploadProgress}%` }}/></div>
+                    <span>{audioUploadProgress}%</span>
+                  </div>
+                )}
+              </div>
+            )}
             {section === 'zoom' && <div className="admin-form-grid">
               <label className="admin-field"><span>Tipo de gravação</span><AdminSelect className="admin-field-select" ariaLabel="Tipo de gravação" value={draft.zoomType} onChange={value => setDraft(c => ({ ...c, zoomType: value }))} options={[{ value: 'Aula', label: 'Aula' }, { value: 'Workshop', label: 'Workshop' }, { value: 'Mentoria', label: 'Mentoria' }]}/></label>
               <label className="admin-field"><span>Categoria</span><input value={draft.zoomCategory} onChange={e => setDraft(c => ({ ...c, zoomCategory: e.target.value }))} placeholder="Ex.: Vendas" maxLength={80}/></label>
@@ -922,6 +1202,7 @@ export function AdminCoursesPage() {
             <div className={`admin-form-config-grid${section === 'blog' ? ' admin-form-config-grid--article' : ''}`}>
               <div className="admin-form-config-left">
                 {section === 'courses' && <label className="admin-field"><span>Nível</span><AdminSelect className="admin-field-select" ariaLabel="Nível" value={draft.level ?? ''} onChange={value => setDraft(c => ({ ...c, level: (value || null) as Course['level'] }))} options={[{ value: '', label: 'Sem nível definido' }, { value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermédio', label: 'Intermédio' }, { value: 'Avançado', label: 'Avançado' }]}/></label>}
+                {(section === 'courses' || section === 'podcasts') && <label className="admin-field"><span>Posição na biblioteca</span><div className="admin-input-icon-wrap"><Hash size={14}/><input type="number" min="1" value={draft.position} onChange={e => setDraft(c => ({ ...c, position: e.target.value }))} placeholder="Ex.: 1, 2, 3…" className="admin-input-has-icon"/></div></label>}
                 {(section === 'courses' || section === 'podcasts') && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
               </div>
               <div className="admin-form-config-right">
@@ -938,13 +1219,8 @@ export function AdminCoursesPage() {
           <div className="admin-form-bottom-bar">
             <div className="admin-form-bottom-estado">
               <span>Estado</span>
-              <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'], scheduledFor: value !== 'scheduled' ? '' : c.scheduledFor }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
-              {draft.status === 'scheduled' && (
-                <div className="admin-input-icon-wrap" style={{marginTop: 8}}>
-                  <CalendarDays size={14}/>
-                  <input type="datetime-local" className="admin-input-has-icon admin-schedule-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>
-                </div>
-              )}
+              <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'] }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
+              {draft.status === 'scheduled' && <input type="datetime-local" className="admin-scheduled-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>}
             </div>
             <button className="button admin-save-btn-new" type="submit" disabled={saving}>
               {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
@@ -977,7 +1253,7 @@ export function AdminCoursesPage() {
                 <li><span><Clock size={12}/> Duração total</span><strong>{totalDurationText(draft.lessons) || '—'}</strong></li>
                 <li><span><GraduationCap size={12}/> Nível</span><strong>{draft.level || 'Sem nível definido'}</strong></li>
               </>}
-              <li><span><Check size={12}/> Estado</span><strong className={`admin-pub-status ${draft.status}`}><span className="admin-status-dot"/>{draft.status === 'published' ? 'Publicado' : 'Rascunho'}</strong></li>
+              <li><span><Check size={12}/> Estado</span><strong className={`admin-pub-status ${draft.status}`}><span className="admin-status-dot"/>{draft.status === 'published' ? 'Publicado' : draft.status === 'scheduled' ? 'Agendado' : 'Rascunho'}</strong></li>
             </ul>
           </div>
           {/* Dicas */}
@@ -994,7 +1270,7 @@ export function AdminCoursesPage() {
       </form>
     </section>}
     {view === 'form' && section === 'blog' && categoryModalOpen && createPortal(
-      <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-category-modal-title" onClick={event => { if (event.target === event.currentTarget) setCategoryModalOpen(false) }}>
+      <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-category-modal-title" onPointerDown={event => { if (event.target === event.currentTarget) setCategoryModalOpen(false) }}>
         <form className="admin-category-modal" onSubmit={createArticleCategory}>
           <button type="button" className="admin-edit-modal-close" onClick={() => setCategoryModalOpen(false)} aria-label="Fechar"><X size={18}/></button>
           <span className="admin-category-modal-icon"><Hash size={18}/></span>
@@ -1009,7 +1285,7 @@ export function AdminCoursesPage() {
       document.body
     )}
     {view === 'form' && section === 'blog' && aiGenerateOpen && createPortal(
-      <div className="admin-ai-backdrop" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) setAiGenerateOpen(false) }}>
+      <div className="admin-ai-backdrop" role="dialog" aria-modal="true" onPointerDown={e => { if (e.target === e.currentTarget) setAiGenerateOpen(false) }}>
         <div className="admin-ai-modal">
           <button type="button" className="admin-edit-modal-close" onClick={() => setAiGenerateOpen(false)} aria-label="Fechar"><X size={18}/></button>
           <div className="admin-ai-modal-header">
@@ -1060,6 +1336,98 @@ export function AdminCoursesPage() {
       </div>,
       document.body
     )}
-    {!isCatalogSection && section !== 'overview' && <section className="admin-panel admin-content-coming"><span className="admin-content-coming-icon"><SectionIcon size={22}/></span><div><p className="eyebrow">SEÇÃO DA ACADEMIA</p><h2>{sectionInfo[section].title}</h2><p>Esta página já está disponível na plataforma. O cadastro para esta seção estará disponível em breve.</p><Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={15}/> Abrir página pública <ArrowUpRight size={14}/></Link></div></section>}
+    {section === 'students' && <>
+      <div className="admin-section-stats">
+        <div className="admin-section-stat"><span className="admin-section-stat-icon"><Users size={24}/></span><span>Total de alunos</span><strong>{loading ? '—' : stats.students.toLocaleString('pt-BR')}</strong><Waveform/></div>
+        <div className="admin-section-stat"><span className="admin-section-stat-icon"><CalendarDays size={24}/></span><span>Novos este mês</span><strong className="published">{loading ? '—' : stats.newStudents.toLocaleString('pt-BR')}</strong><Waveform color="green"/></div>
+      </div>
+      <div className="admin-filter-bar" style={{ marginBottom: 0 }}>
+        <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Buscar por nome ou e-mail…"/></label>
+        <button className="button admin-create-btn" type="button" onClick={() => { setCreateOpen(true); setCreateError(''); setCreateSuccess('') }}><Plus size={16}/> Criar aluno</button>
+        <button className="button admin-create-btn" type="button" style={{ background: 'transparent', border: '1px solid #1e3a52', color: '#7ab3d4' }} onClick={() => { setInviteOpen(true); setInviteError(''); setInviteSuccess('') }}><Mail size={15}/> Convidar por e-mail</button>
+      </div>
+      <div className="admin-panel" style={{ marginTop: 16 }}>
+        <div className="admin-panel-heading"><div><p className="eyebrow">CADASTROS</p><h2>Alunos</h2></div><span>{loading ? '…' : `${students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).length} encontrado(s)`}</span></div>
+        {loading
+          ? <div className="admin-list-loading"><LoaderCircle className="admin-spinner" size={19}/>Carregando alunos…</div>
+          : <div className="admin-students-table">
+              <div className="admin-students-head">
+                <span>Nome</span>
+                <span>E-mail</span>
+                <span>Cadastro</span>
+                <span/>
+              </div>
+              {students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).length === 0
+                ? <div className="admin-courses-empty"><Users size={28}/><strong>Nenhum aluno encontrado</strong><span>{studentSearch ? 'Nenhum resultado para essa busca.' : 'Os alunos cadastrados aparecerão aqui.'}</span></div>
+                : students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).map(s => (
+                  <div className="admin-students-row" key={s.id}>
+                    <span className="admin-students-name"><span className="admin-students-avatar">{(s.name[0] ?? 'A').toUpperCase()}</span>{s.name}</span>
+                    <span className="admin-students-email">{s.email || '—'}</span>
+                    <span className="admin-students-date">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(s.created_at))}</span>
+                    <span className="admin-students-actions">
+                      <button type="button" className="admin-icon-button admin-icon-button--danger" title="Remover aluno" onClick={() => setDeleteConfirmId(s.id)}><Trash2 size={15}/></button>
+                    </span>
+                  </div>
+                ))
+              }
+            </div>
+        }
+      </div>
+      {createOpen && createPortal(
+        <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-create-title" onPointerDown={e => { if (e.target === e.currentTarget) { setCreateOpen(false); setCreateSuccess('') } }}>
+          <form className="admin-category-modal" onSubmit={createStudent}>
+            <button type="button" className="admin-edit-modal-close" onClick={() => { setCreateOpen(false); setCreateSuccess('') }} aria-label="Fechar"><X size={18}/></button>
+            <span className="admin-category-modal-icon"><GraduationCap size={18}/></span>
+            <h2 id="admin-create-title">Criar aluno</h2>
+            <p>A conta fica ativa imediatamente. Compartilhe as credenciais com o aluno.</p>
+            {createError && <p className="admin-category-modal-error" role="alert">{createError}</p>}
+            {createSuccess && <p className="admin-category-modal-success" role="status">{createSuccess}</p>}
+            <label className="admin-field"><span>Nome completo</span><input autoFocus value={createName} onChange={e => { setCreateName(e.target.value); setCreateError('') }} placeholder="Ex.: João Silva" maxLength={100}/></label>
+            <label className="admin-field"><span>E-mail <span className="admin-ai-required">*</span></span><input type="email" value={createEmail} onChange={e => { setCreateEmail(e.target.value); setCreateError('') }} placeholder="joao@email.com" required maxLength={200}/></label>
+            <label className="admin-field"><span>Senha <span className="admin-ai-required">*</span></span><input type="password" value={createPassword} onChange={e => { setCreatePassword(e.target.value); setCreateError('') }} placeholder="Mínimo 6 caracteres" required minLength={6} maxLength={100}/></label>
+            <div className="admin-category-modal-actions">
+              <button type="button" className="admin-lesson-cancel-btn" onClick={() => { setCreateOpen(false); setCreateSuccess('') }}>Fechar</button>
+              <button type="submit" className="admin-ai-generate-btn" disabled={createLoading || !createEmail.trim() || !createPassword}>{createLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Criando…</> : <><Plus size={14}/> Criar aluno</>}</button>
+            </div>
+          </form>
+        </div>,
+        document.body
+      )}
+      {inviteOpen && createPortal(
+        <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-invite-title" onPointerDown={e => { if (e.target === e.currentTarget) { setInviteOpen(false); setInviteSuccess('') } }}>
+          <form className="admin-category-modal" onSubmit={inviteStudent}>
+            <button type="button" className="admin-edit-modal-close" onClick={() => { setInviteOpen(false); setInviteSuccess('') }} aria-label="Fechar"><X size={18}/></button>
+            <span className="admin-category-modal-icon"><User size={18}/></span>
+            <h2 id="admin-invite-title">Convidar aluno</h2>
+            <p>O aluno receberá um e-mail para criar a senha e acessar a Academia.</p>
+            {inviteError && <p className="admin-category-modal-error" role="alert">{inviteError}</p>}
+            {inviteSuccess && <p className="admin-category-modal-success" role="status">{inviteSuccess}</p>}
+            <label className="admin-field"><span>Nome completo</span><input autoFocus value={inviteName} onChange={e => { setInviteName(e.target.value); setInviteError('') }} placeholder="Ex.: João Silva" maxLength={100}/></label>
+            <label className="admin-field"><span>E-mail <span className="admin-ai-required">*</span></span><input type="email" value={inviteEmail} onChange={e => { setInviteEmail(e.target.value); setInviteError('') }} placeholder="joao@email.com" required maxLength={200}/></label>
+            <div className="admin-category-modal-actions">
+              <button type="button" className="admin-lesson-cancel-btn" onClick={() => { setInviteOpen(false); setInviteSuccess('') }}>Fechar</button>
+              <button type="submit" className="admin-ai-generate-btn" disabled={inviteLoading || !inviteEmail.trim()}>{inviteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Enviando…</> : <><Plus size={14}/> Enviar convite</>}</button>
+            </div>
+          </form>
+        </div>,
+        document.body
+      )}
+      {deleteConfirmId && createPortal(
+        <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-delete-title" onPointerDown={e => { if (e.target === e.currentTarget) setDeleteConfirmId(null) }}>
+          <div className="admin-category-modal">
+            <button type="button" className="admin-edit-modal-close" onClick={() => setDeleteConfirmId(null)} aria-label="Fechar"><X size={18}/></button>
+            <span className="admin-category-modal-icon" style={{ background: 'rgba(239,68,68,.12)', color: '#f87171' }}><Trash2 size={18}/></span>
+            <h2 id="admin-delete-title">Remover aluno</h2>
+            <p>Esta ação é irreversível. O aluno perderá acesso imediatamente e todos os seus dados serão removidos.</p>
+            <div className="admin-category-modal-actions">
+              <button type="button" className="admin-lesson-cancel-btn" onClick={() => setDeleteConfirmId(null)}>Cancelar</button>
+              <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} disabled={deleteLoading} onClick={() => void deleteStudent(deleteConfirmId)}>{deleteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Removendo…</> : <><Trash2 size={14}/> Remover aluno</>}</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>}
+    {!isCatalogSection && section !== 'overview' && section !== 'students' && <section className="admin-panel admin-content-coming"><span className="admin-content-coming-icon"><SectionIcon size={22}/></span><div><p className="eyebrow">SEÇÃO DA ACADEMIA</p><h2>{sectionInfo[section].title}</h2><p>Esta página já está disponível na plataforma. O cadastro para esta seção estará disponível em breve.</p><Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={15}/> Abrir página pública <ArrowUpRight size={14}/></Link></div></section>}
   </main></AdminShell>
 }

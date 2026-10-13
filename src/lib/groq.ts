@@ -8,10 +8,38 @@ async function callAI(
   const { data, error } = await adminSupabase.functions.invoke('openai-proxy', {
     body: { messages, jsonMode },
   })
-  if (error) throw new Error(error.message || 'Não foi possível acessar o serviço de IA.')
+  if (error) {
+    let detail = ''
+    try { const body = await (error as { context?: { json?: () => Promise<{ error?: { message?: string } }> } })?.context?.json?.(); detail = body?.error?.message ?? '' } catch {}
+    throw new Error(detail || error.message || 'Não foi possível acessar o serviço de IA.')
+  }
   const result = data as { choices?: { message?: { content?: string } }[]; error?: { message?: string } } | null
   if (result?.error?.message) throw new Error(result.error.message)
   return result?.choices?.[0]?.message?.content ?? ''
+}
+
+export async function sortLessonsByAI(lessons: { id: string; title: string }[]): Promise<string[]> {
+  const list = lessons.map((l, i) => `${i}: ${l.title}`).join('\n')
+  const raw = await callAI(
+    [
+      {
+        role: 'system',
+        content: `Você recebe uma lista de títulos de aulas de uma minissérie (cada linha: índice_atual: título). Determine a ordem lógica de exibição — considere numeração ("aula 01", "ep 3"), palavras como "introdução", "abertura", "encerramento", "bônus" e contexto. Retorne um objeto JSON: {"order": [índices na ordem correta]}. Exemplo: {"order": [2, 0, 1, 3]}`,
+      },
+      { role: 'user', content: list },
+    ],
+    true,
+  )
+  // strip markdown code fences if present
+  const clean = raw.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+  let parsed: unknown
+  try { parsed = JSON.parse(clean) } catch { throw new Error(`IA retornou resposta não-JSON: ${clean.slice(0, 120)}`) }
+  const order: number[] = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray((parsed as Record<string, unknown>)?.order)
+      ? (parsed as { order: number[] }).order
+      : (() => { throw new Error(`Formato inesperado da IA: ${JSON.stringify(parsed).slice(0, 120)}`) })()
+  return order.map((i: number) => lessons[i]?.id).filter(Boolean) as string[]
 }
 
 export async function correctText(text: string): Promise<string> {
