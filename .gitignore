@@ -1,6 +1,7 @@
 node_modules
 dist
 .env
+server/hostinger/api-academia/config.php
 .env.local
 *.tsbuildinfo
 supabase/.temp/
