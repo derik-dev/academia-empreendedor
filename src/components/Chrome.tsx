@@ -8,6 +8,7 @@ import { usePublishedCourses } from '../data/usePublishedCourses'
 import { useAuth } from '../auth/useAuth'
 import { supabase } from '../lib/supabase'
 import { img } from '../lib/publicUrl'
+import { normalizeSearch } from '../lib/normalizeSearch'
 
 const SIDEBAR_NAV = [
   { to: '/', label: 'Início', Icon: Home },
@@ -108,8 +109,8 @@ export function SearchHeader() {
   const { courses: publishedCourses } = usePublishedCourses()
   const areaImages = Object.fromEntries(areas.map(a => [a.slug, a.image]))
   const searchable = publishedCourses.map(c => ({ ...c, image: c.image || areaImages[c.slug] || '' }))
-  const normalizedQuery = query.trim().toLocaleLowerCase('pt-PT')
-  const matches = normalizedQuery ? searchable.filter(item => `${item.title} ${item.category} ${item.author} ${item.description}`.toLocaleLowerCase('pt-PT').includes(normalizedQuery)).slice(0, 5) : []
+  const normalizedQuery = normalizeSearch(query)
+  const matches = normalizedQuery ? searchable.filter(item => normalizeSearch(`${item.title} ${item.category} ${item.author} ${item.description}`).includes(normalizedQuery)).slice(0, 5) : []
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (matches[0]) { navigate(`/assistir/${matches[0].slug}`); setQuery(''); setOpen(false) }
