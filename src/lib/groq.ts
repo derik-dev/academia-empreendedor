@@ -10,7 +10,7 @@ async function callAI(
   })
   if (error) {
     let detail = ''
-    try { const body = await (error as { context?: { json?: () => Promise<{ error?: { message?: string } }> } })?.context?.json?.(); detail = body?.error?.message ?? '' } catch {}
+    try { const body = await (error as { context?: { json?: () => Promise<{ error?: { message?: string } }> } })?.context?.json?.(); detail = body?.error?.message ?? '' } catch { /* ignore JSON parse errors */ }
     throw new Error(detail || error.message || 'Não foi possível acessar o serviço de IA.')
   }
   const result = data as { choices?: { message?: { content?: string } }[]; error?: { message?: string } } | null
