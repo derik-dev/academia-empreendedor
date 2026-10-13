@@ -15,7 +15,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  // Detecta exclusão ou suspensão de conta pelo admin em até 30 segundos
   useEffect(() => {
     if (!supabase || !session) return
     const validate = async () => {
@@ -24,13 +23,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (error) await supabase!.auth.signOut({ scope: 'local' })
       } catch { /* rede indisponível — não deslogar */ }
     }
-    const id = window.setInterval(validate, 30_000)
-    return () => window.clearInterval(id)
+    const id = window.setInterval(validate, 300_000)
+    const onVisible = () => { if (document.visibilityState === 'visible') void validate() }
+    const onFocus = () => void validate()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [session])
   const signIn = async (identifier: string, password: string) => {
     if (!supabase) return 'O Supabase ainda não está configurado. Preencha as variáveis do arquivo .env.'
-    const normalizedIdentifier = identifier.trim().toLowerCase()
-    const email = normalizedIdentifier === 'ericeenio' ? 'ericeenio@gmail.com' : normalizedIdentifier
+    const email = identifier.trim().toLowerCase()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error) return null
     if (error.code === 'invalid_credentials' || error.code === 'user_not_found') return 'Usuário, e-mail ou senha incorretos.'
