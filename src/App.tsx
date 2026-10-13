@@ -365,10 +365,11 @@ function NativePodcastPlayer({ signedUrl, title, author, image, playing, onPlayi
   </div>
 }
 
-function PodcastDetailPanel({ item, allItems, activeSlug, playing, onClose, onPlay }: { item: ContentArea; allItems: ContentArea[]; activeSlug: string | null; playing: boolean; onClose: () => void; onPlay: (item: ContentArea) => void }) {
+function PodcastDetailPanel({ item, allItems, activeSlug, playing, onClose, onPlay }: { item: ContentArea; allItems: ContentArea[]; activeSlug: string | null; playing: boolean; onClose: () => void; onPlay: (item: ContentArea, episodeAudioPath?: string) => void }) {
   const nextItems = allItems.filter(i => i.slug !== item.slug)
   const authorName = item.author.replace('Com ', '')
   const authorPhoto = item.professorImage || getProfessorPhoto(authorName)
+  const episodes = item.lessons?.filter(l => l.audioPath).sort((a, b) => a.position - b.position) ?? []
   return <aside className="pd-panel">
       <div className="pd-cover"><img src={cardCover(item.image)} alt={`Capa de ${item.title}`}/></div>
       <div className="pd-head">
@@ -380,7 +381,20 @@ function PodcastDetailPanel({ item, allItems, activeSlug, playing, onClose, onPl
       </div>
       <div className="pd-body">
         <p className="pd-desc">{item.description}</p>
-        <button type="button" className="pd-play-btn" onClick={() => onPlay(item)} aria-label={activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}>{activeSlug === item.slug && playing ? <Pause size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>} {activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}</button>
+        {episodes.length === 0 && <button type="button" className="pd-play-btn" onClick={() => onPlay(item)} aria-label={activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}>{activeSlug === item.slug && playing ? <Pause size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>} {activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}</button>}
+        {episodes.length > 0 && <div className="pd-section">
+          <div className="pd-section-head"><span>Episódios</span><span>{episodes.length} ep.</span></div>
+          {episodes.map(ep => <div className="pd-episode" key={ep.id ?? ep.position}>
+            <button type="button" className="pd-episode-play" aria-label={`Reproduzir episódio ${ep.position + 1}: ${ep.title}`} onClick={() => onPlay(item, ep.audioPath)}>
+              <Play size={14} fill="currentColor"/>
+            </button>
+            <div className="pd-episode-info">
+              <span className="pd-episode-num">Ep. {ep.position + 1}</span>
+              <strong>{ep.title}</strong>
+              {ep.durationSeconds > 0 && <span className="pd-episode-dur">{formatPodcastTime(ep.durationSeconds)}</span>}
+            </div>
+          </div>)}
+        </div>}
         <div className="pd-section">
           <div className="pd-section-head"><span>Créditos</span><button type="button">Mostrar tudo</button></div>
           <div className="pd-credit-card">
@@ -410,7 +424,6 @@ function PodcastDetailPanel({ item, allItems, activeSlug, playing, onClose, onPl
 
 function PodcastsPage() {
   const { courses: podcastLibrary, loading: podcastsLoading } = useLibraryCourses()
-  const items = podcastLibrary.filter(item => item.category === 'Podcasts')
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedPodcastSlug = searchParams.get('podcast')
   type ActivePodcastPlayer =
@@ -420,6 +433,9 @@ function PodcastsPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [playerLoading, setPlayerLoading] = useState<string | null>(null)
   const [detailItem, setDetailItem] = useState<ContentArea | null>(null)
+  const [activeFilter, setActiveFilter] = useState('Todos')
+  const allPodcasts = podcastLibrary.filter(item => item.category === 'Podcasts')
+  const items = activeFilter === 'Todos' ? allPodcasts : allPodcasts.filter(item => item.categoryTag === activeFilter)
 
   useEffect(() => { loadYT().catch(() => {}) }, [])
   useEffect(() => {
@@ -435,13 +451,22 @@ function PodcastsPage() {
     nextParams.set('podcast', item.slug)
     setSearchParams(nextParams)
   }
-  const togglePodcast = async (podcast: ContentArea) => {
-    if (activePlayer?.slug === podcast.slug) { setIsPlaying(current => !current); openPodcast(podcast); return }
+  const togglePodcast = async (podcast: ContentArea, episodeAudioPath?: string) => {
+    if (activePlayer?.slug === podcast.slug && !episodeAudioPath) { setIsPlaying(current => !current); openPodcast(podcast); return }
+    // Resolve audio: explicit episode > course-level > first episode with audio
+    const firstEpisode = podcast.lessons?.find(l => l.audioPath)
+    const rawPath = episodeAudioPath ?? podcast.audioPath ?? firstEpisode?.audioPath
     let source: ReturnType<typeof resolveAudioSource> = null
-    try { source = resolveAudioSource(podcast.audioPath) } catch { /* caminho inválido; cai no fallback */ }
+    try { source = resolveAudioSource(rawPath) } catch { /* caminho inválido; cai no fallback */ }
+    // Build player title: include episode number/title when playing a specific episode
+    let playerTitle = podcast.title
+    if (rawPath && rawPath !== podcast.audioPath && podcast.lessons) {
+      const ep = podcast.lessons.find(l => l.audioPath === rawPath)
+      if (ep) playerTitle = `Ep. ${ep.position + 1} — ${ep.title}`
+    }
     if (source?.kind === 'host') {
       if (source.url) {
-        setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: source.url, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
+        setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: source.url, title: playerTitle, author: podcast.author.replace('Com ', ''), image: podcast.image })
         setIsPlaying(true)
         openPodcast(podcast)
         return
@@ -452,7 +477,7 @@ function PodcastsPage() {
       try {
         const { data } = await supabase.storage.from('podcast-audio').createSignedUrl(source.path, 3600)
         if (data?.signedUrl) {
-          setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: data.signedUrl, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
+          setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: data.signedUrl, title: playerTitle, author: podcast.author.replace('Com ', ''), image: podcast.image })
           setIsPlaying(true)
           openPodcast(podcast)
           return
@@ -500,7 +525,7 @@ function PodcastsPage() {
           <div className="ms-hero-search"><SearchHeader /></div>
         </div>
         <div className="podcast-filters">
-          {['Todos','Mentalidade','Negócios','Crescimento','Estratégia','Empreendedorismo'].map(f => <button type="button" key={f} className={f === 'Todos' ? 'active' : ''}>{f}</button>)}
+          {['Todos','Mentalidade','Negócios','Crescimento','Estratégia','Empreendedorismo'].map(f => <button type="button" key={f} className={f === activeFilter ? 'active' : ''} onClick={() => setActiveFilter(f)}>{f}</button>)}
         </div>
       </div>
       <div className="podcast-list">
@@ -527,10 +552,10 @@ function PodcastsPage() {
       </div>
     </section>
 
-    {activePlayer?.kind === 'native' && <NativePodcastPlayer key={activePlayer.slug} signedUrl={activePlayer.signedUrl} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
+    {activePlayer?.kind === 'native' && <NativePodcastPlayer key={activePlayer.signedUrl} signedUrl={activePlayer.signedUrl} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
     {activePlayer?.kind === 'youtube' && <PodcastAudioPlayer videoId={getYouTubeId(activePlayer.url)!} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
   </div></main></div>
-  {detailItem && <PodcastDetailPanel item={detailItem} allItems={items} activeSlug={activePlayer?.slug ?? null} playing={isPlaying} onClose={closePodcast} onPlay={(item) => { void togglePodcast(item) }}/>}
+  {detailItem && <PodcastDetailPanel item={detailItem} allItems={items} activeSlug={activePlayer?.slug ?? null} playing={isPlaying} onClose={closePodcast} onPlay={(item, audioPath) => { void togglePodcast(item, audioPath) }}/>}
   </div>
 }
 

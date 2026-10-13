@@ -378,7 +378,8 @@ body :is(.eyebrow,.hero h1 em,.login-art-copy h1 em,.blog-banner h1 em,.brand-ma
 .admin-form-config-grid--article .admin-form-config-right>.admin-field{width:min(100%,560px)}
 .admin-form-config-grid--article .admin-cover-upload-compact{aspect-ratio:16/9;min-height:0}
 .admin-form-config-left{display:flex;flex-direction:column;gap:14px}
-.admin-form-config-right{display:flex;flex-direction:column}
+.admin-form-config-right{display:flex;flex-direction:column;align-items:center}
+.admin-form-config-right>.admin-field{width:min(100%,480px)}
 .admin-checkbox-copy{display:flex;flex-direction:column;gap:2px}
 .admin-checkbox-copy small{color:#6b8499;font-size:11px}
 .admin-cover-upload-compact{position:relative;aspect-ratio:16/9;display:grid;place-items:center;overflow:hidden;border:1px dashed #36516d;border-radius:7px;background:#080e16;cursor:pointer;transition:border-color .18s}
@@ -1545,6 +1546,14 @@ button.watch-playlist-item{width:100%}
 .pd-next-info span{font-size:11px;color:#5a7080}
 .pd-play-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border:0;border-radius:8px;background:#1d7ec7;color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:.15s}
 .pd-play-btn:hover{background:#1565a8}
+.pd-episode{display:flex;align-items:center;gap:12px;padding:10px;border:1px solid #1a2a3a;border-radius:9px;background:#080e17;transition:border-color .15s,background .15s}
+.pd-episode:hover{border-color:#2b5d84;background:#0b1420}
+.pd-episode-play{flex:none;display:grid;place-items:center;width:34px;height:34px;border:1px solid #2b5d84;border-radius:50%;background:transparent;color:#6ab8f7;cursor:pointer;transition:.15s}
+.pd-episode-play:hover{background:#1d7ec7;border-color:#1d7ec7;color:#fff}
+.pd-episode-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.pd-episode-num{font-size:11px;color:#4a6070;text-transform:uppercase;letter-spacing:.05em}
+.pd-episode-info strong{font-size:13px;font-weight:600;color:#d0e4f2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pd-episode-dur{font-size:11px;color:#5a7080}
 
 /* ══ INTERVIEWS PAGE ══ */
 .iv-hero{height:310px}
