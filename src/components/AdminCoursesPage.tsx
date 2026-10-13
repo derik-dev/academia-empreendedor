@@ -15,9 +15,12 @@ import { getYouTubeVideoId } from '../lib/youtube'
 import { correctText, generateArticle, sortLessonsByAI, type GenerateParams } from '../lib/groq'
 
 async function readFnError(error: unknown, data: unknown, fallback: string): Promise<string> {
-  if (data && typeof data === 'object' && 'error' in (data as object)) return String((data as any).error)
+  if (data && typeof data === 'object' && 'error' in (data as object)) return String((data as Record<string, unknown>).error)
   if (error) {
-    try { const b = await (error as any)?.context?.json?.(); if (b?.error) return String(b.error) } catch {}
+    try {
+      const b = await (error as { context?: { json?: () => Promise<{ error?: unknown }> } })?.context?.json?.()
+      if (b?.error) return String(b.error)
+    } catch { /* ignore JSON parse errors */ }
   }
   return fallback
 }
@@ -351,6 +354,7 @@ export function AdminCoursesPage() {
   const [createSuccess, setCreateSuccess] = useState('')
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<{ id: string; title: string } | null>(null)
 
   const loadDashboard = useCallback(async () => {
     const client = adminSupabase
@@ -518,7 +522,7 @@ export function AdminCoursesPage() {
       }))
     }
   }
-  const togglePlaylistItem = (videoId: string) => setPlaylistSelected(s => { const n = new Set(s); n.has(videoId) ? n.delete(videoId) : n.add(videoId); return n })
+  const togglePlaylistItem = (videoId: string) => setPlaylistSelected(s => { const n = new Set(s); if (n.has(videoId)) n.delete(videoId); else n.add(videoId); return n })
   const importPlaylistLessons = () => {
     const toAdd = playlistItems.filter(v => playlistSelected.has(v.videoId))
     if (!toAdd.length) return
@@ -756,14 +760,19 @@ export function AdminCoursesPage() {
     setView('form')
   }
 
-  const deleteCourse = async (course: Course) => {
-    if (!adminSupabase) return
-    if (!window.confirm(`Excluir "${course.title}"? Esta ação não pode ser desfeita.`)) return
+  const deleteCourse = (course: Course) => {
+    setDeleteCourseConfirm({ id: course.id, title: course.title })
+  }
+
+  const confirmDeleteCourse = async () => {
+    if (!adminSupabase || !deleteCourseConfirm) return
+    const { id, title } = deleteCourseConfirm
     const tableBySection: Partial<Record<AdminSection, string>> = { interviews: 'interviews', blog: 'articles', zoom: 'zoom_recordings' }
     const table = tableBySection[section] ?? 'courses'
-    const { error: deleteError } = await adminSupabase.from(table).delete().eq('id', course.id)
+    setDeleteCourseConfirm(null)
+    const { error: deleteError } = await adminSupabase.from(table).delete().eq('id', id)
     if (deleteError) setError('Não foi possível excluir o conteúdo.')
-    else { setNotice(`${course.title} foi excluído.`); await loadDashboard() }
+    else { setNotice(`${title} foi excluído.`); await loadDashboard() }
   }
 
 
@@ -1409,6 +1418,21 @@ export function AdminCoursesPage() {
               <button type="submit" className="admin-ai-generate-btn" disabled={inviteLoading || !inviteEmail.trim()}>{inviteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Enviando…</> : <><Plus size={14}/> Enviar convite</>}</button>
             </div>
           </form>
+        </div>,
+        document.body
+      )}
+      {deleteCourseConfirm && createPortal(
+        <div className="admin-category-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="admin-delete-course-title" onPointerDown={e => { if (e.target === e.currentTarget) setDeleteCourseConfirm(null) }}>
+          <div className="admin-category-modal">
+            <button type="button" className="admin-edit-modal-close" onClick={() => setDeleteCourseConfirm(null)} aria-label="Fechar"><X size={18}/></button>
+            <span className="admin-category-modal-icon" style={{ background: 'rgba(239,68,68,.12)', color: '#f87171' }}><Trash2 size={18}/></span>
+            <h2 id="admin-delete-course-title">Excluir conteúdo</h2>
+            <p>Excluir <strong>"{deleteCourseConfirm.title}"</strong>? Esta ação não pode ser desfeita.</p>
+            <div className="admin-category-modal-actions">
+              <button type="button" className="admin-lesson-cancel-btn" onClick={() => setDeleteCourseConfirm(null)}>Cancelar</button>
+              <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} onClick={() => void confirmDeleteCourse()}><Trash2 size={14}/> Excluir</button>
+            </div>
+          </div>
         </div>,
         document.body
       )}
