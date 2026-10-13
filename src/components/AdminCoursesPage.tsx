@@ -212,7 +212,7 @@ const sectionCats: Partial<Record<AdminSection, Course['category'][]>> = {
 }
 const sectionMeta: Partial<Record<AdminSection, { item: string; plural: string; eyebrow: string; titleLabel: string; authorLabel: string; videoLabel: string }>> = {
   courses:    { item: 'minissérie', plural: 'minisséries', eyebrow: 'MINISSÉRIES', titleLabel: 'Título da minissérie', authorLabel: 'Autor', videoLabel: 'Link da aula' },
-  podcasts:   { item: 'podcast',    plural: 'podcasts',    eyebrow: 'PODCASTS',     titleLabel: 'Título do podcast',    authorLabel: 'Participantes',  videoLabel: 'Link do áudio' },
+  podcasts:   { item: 'podcast',    plural: 'podcasts',    eyebrow: 'PODCASTS',     titleLabel: 'Título do podcast',    authorLabel: 'Autores',        videoLabel: 'Link do áudio' },
   interviews: { item: 'entrevista', plural: 'entrevistas', eyebrow: 'ENTREVISTAS',  titleLabel: 'Título da entrevista', authorLabel: 'Convidado',      videoLabel: 'Link do vídeo' },
   zoom:       { item: 'gravação',   plural: 'gravações',   eyebrow: 'GRAVAÇÕES',    titleLabel: 'Título da gravação',   authorLabel: 'Apresentador',   videoLabel: 'Link do vídeo' },
   blog:       { item: 'artigo',     plural: 'artigos',     eyebrow: 'BLOG',         titleLabel: 'Título do artigo',     authorLabel: 'Autor',          videoLabel: 'Link do vídeo' },
@@ -353,11 +353,7 @@ export function AdminCoursesPage() {
   const [playlistItems, setPlaylistItems] = useState<PlaylistVideoItem[]>([])
   const [playlistSelected, setPlaylistSelected] = useState<Set<string>>(new Set())
   const [playlistError, setPlaylistError] = useState('')
-  const [audioUploadProgress, setAudioUploadProgress] = useState(0)
-  const [audioUploading, setAudioUploading] = useState(false)
   const [audioDeleteQueue, setAudioDeleteQueue] = useState<string[]>([])
-  const audioUploadAbortRef = useRef<AbortController | null>(null)
-  const audioUploadLockRef = useRef(false)
   const [lessonAudioUploading, setLessonAudioUploading] = useState(false)
   const [lessonAudioUploadProgress, setLessonAudioUploadProgress] = useState(0)
   const lessonAudioUploadAbortRef = useRef<AbortController | null>(null)
@@ -432,63 +428,6 @@ export function AdminCoursesPage() {
     }
   }
 
-  const startAudioUpload = async (file: File, oldHostPathToDelete?: string) => {
-    if (audioUploadLockRef.current || saving) return
-    audioUploadLockRef.current = true
-    setAudioUploading(true)
-    setAudioUploadProgress(1)
-    setError('')
-    const controller = new AbortController()
-    audioUploadAbortRef.current = controller
-    try {
-      let duration = 0
-      try { duration = await readAudioDuration(file) } catch { /* A duração continua editável manualmente. */ }
-      const token = await getAdminAccessToken()
-      const uploadUrl = import.meta.env.VITE_AUDIO_UPLOAD_URL
-      if (!uploadUrl) throw new Error('Envio de áudio não disponível. Contacte o suporte técnico.')
-      const result = await uploadAudioWithProgress(uploadUrl, file, token, setAudioUploadProgress, controller.signal)
-      setDraft(current => ({
-        ...current,
-        audioFile: file,
-        audioPath: `host:${result.path}`,
-        durationText: current.durationText.trim() || !duration ? current.durationText : formatAudioDuration(duration),
-      }))
-      if (oldHostPathToDelete && safeResolveAudioSource(oldHostPathToDelete)?.kind === 'host') {
-        setAudioDeleteQueue(current => current.includes(oldHostPathToDelete) ? current : [...current, oldHostPathToDelete])
-      }
-      setNotice('Áudio enviado. Pode ouvi-lo na pré-visualização antes de guardar.')
-    } catch (caught) {
-      setDraft(current => ({ ...current, audioFile: null }))
-      if (caught instanceof DOMException && caught.name === 'AbortError') setNotice('Envio de áudio cancelado.')
-      else setError(errorMessage(caught))
-    } finally {
-      audioUploadLockRef.current = false
-      audioUploadAbortRef.current = null
-      setAudioUploading(false)
-      setAudioUploadProgress(0)
-    }
-  }
-
-  const handleAudioFile = (file: File | null) => {
-    if (!file) return
-    const extensionIsMp3 = file.name.toLowerCase().endsWith('.mp3')
-    const mimeIsMp3 = !file.type || file.type === 'audio/mpeg' || file.type === 'audio/mp3' || file.type === 'application/octet-stream'
-    if (!extensionIsMp3 || !mimeIsMp3) {
-      setError('Envie apenas ficheiros MP3. Converta o WAV para MP3 antes de enviar.')
-      return
-    }
-    if (file.size > MAX_AUDIO_BYTES) {
-      setError('O ficheiro não pode ter mais de 150 MB.')
-      return
-    }
-    setError('')
-    // Se já havia áudio hospedado, enfileira para remoção automática após salvar.
-    const oldPath = draft.audioPath
-    void startAudioUpload(file, safeResolveAudioSource(oldPath)?.kind === 'host' ? oldPath : undefined)
-  }
-
-  const cancelAudioUpload = () => audioUploadAbortRef.current?.abort()
-
   const startLessonAudioUpload = async (file: File) => {
     if (lessonAudioUploadLockRef.current || saving) return
     lessonAudioUploadLockRef.current = true
@@ -542,7 +481,7 @@ export function AdminCoursesPage() {
     setDraft(d => ({ ...d, audioPath: '', lessons: [episode] }))
   }
 
-  const draftAudioSource = safeResolveAudioSource(draft.audioPath)
+
 
   const loadDashboard = useCallback(async () => {
     const client = adminSupabase
@@ -628,7 +567,6 @@ export function AdminCoursesPage() {
   }
 
   const resetForm = useCallback(() => {
-    audioUploadAbortRef.current?.abort()
     lessonAudioUploadAbortRef.current?.abort()
     setAudioDeleteQueue([])
     setDraft({ ...blankDraft, category: sectionCategory[section] ?? 'miniseries', instructor: section === 'courses' ? PROFESSOR_OPTIONS[0].value : '' })
@@ -838,7 +776,7 @@ export function AdminCoursesPage() {
 
   const saveCourse = async (event: FormEvent) => {
     event.preventDefault()
-    if (!adminSupabase || !user || saving || audioUploading || audioUploadLockRef.current || lessonAudioUploading) return
+    if (!adminSupabase || !user || saving || false || lessonAudioUploading) return
     setSaving(true)
     setError('')
     setNotice('')
@@ -897,7 +835,7 @@ export function AdminCoursesPage() {
         instructor: draft.instructor.trim(),
         category: section === 'courses' ? 'miniseries' : draft.category,
         video_url: draft.videoUrl.trim() || null,
-        body: draft.body.trim() || null,
+        body: section === 'podcasts' ? (draft.articleCategory.trim() || null) : (draft.body.trim() || null),
         notes_enabled: draft.notesEnabled,
         lesson_count: (section === 'courses' || (section === 'podcasts' && draft.lessons.length > 0)) ? (draft.lessons.length || null) : (draft.lessonCount ? parseInt(draft.lessonCount) : null),
         duration_text: (section === 'courses' || (section === 'podcasts' && draft.lessons.length > 0)) ? (totalDurationText(draft.lessons) || null) : (draft.durationText.trim() || null),
@@ -953,7 +891,7 @@ export function AdminCoursesPage() {
     } catch (caught) {
       console.error('Falha ao salvar conteúdo no painel administrativo:', caught)
       setError(errorMessage(caught))
-    } finally { setSaving(false); setAudioUploadProgress(0) }
+    } finally { setSaving(false) }
   }
 
   const editCourse = async (course: Course) => {
@@ -969,6 +907,8 @@ export function AdminCoursesPage() {
       const { data } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
       articleBody = data?.content ?? ''
       articleCategory = data?.category ?? 'Mentalidade'
+    } else if (course.category === 'podcast' && course.body) {
+      articleCategory = course.body
     }
     setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', position: course.position?.toString() ?? '', coverUrl: course.cover_url, file: null, audioFile: null, audioPath: course.audio_path ?? '', notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], removedLessonAudioPaths: [], articleCategory, interviewAuthor: course.interview_author ?? '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
     setPreviewUrl(cardCover(course.cover_url || areaImage[course.slug]))
@@ -1207,7 +1147,7 @@ export function AdminCoursesPage() {
             </div>
             <div className="admin-field-row-equal">
               <label className="admin-field"><span>{meta.titleLabel}</span><input value={draft.title} onChange={e => setDraft(c => ({ ...c, title: e.target.value }))} placeholder={`Ex.: Título do ${meta.item}`} required maxLength={100}/></label>
-              {(section === 'courses' || section === 'blog')
+              {(section === 'courses' || section === 'blog' || section === 'podcasts')
                 ? <div className="admin-field"><span>{meta.authorLabel}</span><AdminSelect ariaLabel={meta.authorLabel} className="admin-author-select" value={draft.instructor} onChange={v => setDraft(c => ({ ...c, instructor: v }))} options={PROFESSOR_OPTIONS}/></div>
                 : <label className="admin-field"><span>{meta.authorLabel}</span><input value={draft.instructor} onChange={e => setDraft(c => ({ ...c, instructor: e.target.value }))} placeholder={meta.authorLabel} maxLength={100}/></label>}
               {section === 'interviews' && (
@@ -1215,6 +1155,12 @@ export function AdminCoursesPage() {
               )}
             </div>
             <label className="admin-field"><span>Descrição</span><textarea value={draft.description} onChange={e => setDraft(c => ({ ...c, description: e.target.value }))} placeholder={`Sobre este ${meta.item}…`} required rows={4} maxLength={1200}/></label>
+            {section === 'podcasts' && (
+              <div className="admin-field">
+                <span>Tema</span>
+                <AdminSelect ariaLabel="Tema do podcast" className="admin-category-select" value={draft.articleCategory} onChange={v => setDraft(c => ({ ...c, articleCategory: v }))} options={articleCategories}/>
+              </div>
+            )}
             {section === 'blog' && (
               <div className="admin-field-row-equal">
                 <div className="admin-field admin-category-field" style={{ marginTop: 0 }}>
@@ -1447,76 +1393,19 @@ export function AdminCoursesPage() {
               </div>
             )}
           </div>}
-          {/* Seção 2 — Conteúdo (para não-blog não-courses; para podcasts, só mostra se não há episódios) */}
-          {section !== 'blog' && section !== 'courses' && !(section === 'podcasts' && draft.lessons.length > 0) && <div className="admin-form-card">
+          {/* Seção 2 — Conteúdo (entrevistas, zoom; podcasts sempre usam episódios) */}
+          {section !== 'blog' && section !== 'courses' && section !== 'podcasts' && <div className="admin-form-card">
             <div className="admin-form-section-head">
               <div className="admin-form-section-left"><span className="admin-form-step">2</span><div><strong>Conteúdo</strong><span>Configure o conteúdo e a estrutura do {meta.item}.</span></div></div>
             </div>
-            <label className="admin-field"><span>{meta.videoLabel}{section === 'podcasts' && <span className="admin-ai-optional"> (opcional se tiver MP3)</span>}</span>
-              <div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={draft.videoUrl} onChange={e => setDraft(c => ({ ...c, videoUrl: e.target.value }))} placeholder="https://…" required={section !== 'podcasts'} className="admin-input-has-icon"/></div>
+            <label className="admin-field"><span>{meta.videoLabel}</span>
+              <div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={draft.videoUrl} onChange={e => setDraft(c => ({ ...c, videoUrl: e.target.value }))} placeholder="https://…" required className="admin-input-has-icon"/></div>
             </label>
-            {section === 'podcasts' && (
-              <div className="admin-field">
-                <span>Ficheiro de áudio MP3 <span className="admin-ai-optional">(opcional se tiver link de YouTube)</span></span>
-                {draft.audioPath && (
-                  <>
-                    <div className="admin-audio-current">
-                      <Music size={14}/><span>Áudio carregado</span>
-                      <button type="button" className="admin-audio-remove-btn" disabled={audioUploading} onClick={() => {
-                        const oldPath = draft.audioPath
-                        setDraft(current => ({ ...current, audioPath: '' }))
-                        if (safeResolveAudioSource(oldPath)?.kind === 'host') {
-                          setAudioDeleteQueue(current => current.includes(oldPath) ? current : [...current, oldPath])
-                        }
-                      }}><X size={12}/> Remover</button>
-                    </div>
-                    {draftAudioSource?.kind === 'host' && (draftAudioSource.url
-                      ? <audio className="admin-audio-preview" controls preload="metadata" src={draftAudioSource.url}>O navegador não suporta a reprodução de áudio.</audio>
-                      : <p className="admin-audio-preview-note">Pré-visualização indisponível.</p>)}
-                  </>
-                )}
-                <label className={`admin-audio-upload-area${draft.audioFile ? ' admin-audio-upload-area--selected' : ''}`}>
-                  <input type="file" accept="audio/mpeg,.mp3" disabled={audioUploading || saving} onChange={e => {
-                    handleAudioFile(e.target.files?.[0] ?? null)
-                    e.target.value = ''
-                  }}/>
-                  {draft.audioFile ? (
-                    <div className="admin-audio-file-info">
-                      <Music size={18}/>
-                      <div><strong>{draft.audioFile.name}</strong><span>{(draft.audioFile.size / 1024 / 1024).toFixed(1)} MB</span></div>
-                      <button type="button" className="admin-audio-remove-btn admin-audio-remove-btn--inline" disabled={audioUploading || saving} onClick={event => {
-                        event.preventDefault()
-                        setDraft(current => ({ ...current, audioFile: null }))
-                      }}><X size={13}/></button>
-                    </div>
-                  ) : (
-                    <span className="admin-audio-placeholder"><Upload size={20}/><strong>Escolher MP3</strong><small>Máx. 150 MB · clique ou arraste</small></span>
-                  )}
-                </label>
-                <div className="admin-audio-help">
-                  <strong>Como preparar o áudio</strong>
-                  <ol>
-                    <li>Abra o WAV no Audacity, gratuito, ou use o FFmpeg.</li>
-                    <li>Exporte em MP3, 96 kbps, mono, adequado para voz.</li>
-                    <li>Guarde o ficheiro com a extensão <code>.mp3</code>.</li>
-                    <li>Envie o MP3 aqui; o limite é 150 MB.</li>
-                  </ol>
-                  <code>ffmpeg -i entrada.wav -codec:a libmp3lame -b:a 96k -ac 1 saida.mp3</code>
-                </div>
-                {audioUploading && audioUploadProgress > 0 && (
-                  <div className="admin-audio-progress-wrap">
-                    <div className="admin-audio-progress-bar"><div className="admin-audio-progress-fill" style={{ width: `${audioUploadProgress}%` }}/></div>
-                    <span>{audioUploadProgress}%</span>
-                    <button type="button" className="admin-audio-cancel-btn" onClick={cancelAudioUpload}>Cancelar</button>
-                  </div>
-                )}
-              </div>
-            )}
             {section === 'zoom' && <div className="admin-form-grid">
               <label className="admin-field"><span>Tipo de gravação</span><AdminSelect className="admin-field-select" ariaLabel="Tipo de gravação" value={draft.zoomType} onChange={value => setDraft(c => ({ ...c, zoomType: value }))} options={[{ value: 'Aula', label: 'Aula' }, { value: 'Workshop', label: 'Workshop' }, { value: 'Mentoria', label: 'Mentoria' }]}/></label>
               <label className="admin-field"><span>Categoria</span><input value={draft.zoomCategory} onChange={e => setDraft(c => ({ ...c, zoomCategory: e.target.value }))} placeholder="Ex.: Vendas" maxLength={80}/></label>
             </div>}
-            {(section === 'podcasts' || section === 'zoom') && <label className="admin-field"><span>Duração</span><input value={draft.durationText} onChange={e => setDraft(c => ({ ...c, durationText: e.target.value }))} placeholder="Ex.: 45 min"/></label>}
+            {section === 'zoom' && <label className="admin-field"><span>Duração</span><input value={draft.durationText} onChange={e => setDraft(c => ({ ...c, durationText: e.target.value }))} placeholder="Ex.: 45 min"/></label>}
           </div>}
           {/* Seção 3 — Configurações */}
           <div className="admin-form-card">
@@ -1526,8 +1415,8 @@ export function AdminCoursesPage() {
             <div className={`admin-form-config-grid${section === 'blog' ? ' admin-form-config-grid--article' : ''}`}>
               <div className="admin-form-config-left">
                 {section === 'courses' && <label className="admin-field"><span>Nível</span><AdminSelect className="admin-field-select" ariaLabel="Nível" value={draft.level ?? ''} onChange={value => setDraft(c => ({ ...c, level: (value || null) as Course['level'] }))} options={[{ value: '', label: 'Sem nível definido' }, { value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermédio', label: 'Intermédio' }, { value: 'Avançado', label: 'Avançado' }]}/></label>}
-                {(section === 'courses' || section === 'podcasts') && <label className="admin-field"><span>Posição na biblioteca</span><div className="admin-input-icon-wrap"><Hash size={14}/><input type="number" min="1" value={draft.position} onChange={e => setDraft(c => ({ ...c, position: e.target.value }))} placeholder="Ex.: 1, 2, 3…" className="admin-input-has-icon"/></div></label>}
-                {(section === 'courses' || section === 'podcasts') && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
+                {section === 'courses' && <label className="admin-field"><span>Posição na biblioteca</span><div className="admin-input-icon-wrap"><Hash size={14}/><input type="number" min="1" value={draft.position} onChange={e => setDraft(c => ({ ...c, position: e.target.value }))} placeholder="Ex.: 1, 2, 3…" className="admin-input-has-icon"/></div></label>}
+                {section === 'courses' && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
               </div>
               <div className="admin-form-config-right">
                 <div className="admin-field"><span>Capa</span>
@@ -1546,8 +1435,8 @@ export function AdminCoursesPage() {
               <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'] }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
               {draft.status === 'scheduled' && <input type="datetime-local" className="admin-scheduled-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>}
             </div>
-            <button className="button admin-save-btn-new" type="submit" disabled={saving || audioUploading}>
-              {audioUploading ? <><LoaderCircle className="admin-spinner" size={17}/>A enviar áudio…</> : saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
+            <button className="button admin-save-btn-new" type="submit" disabled={saving}>
+              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
             </button>
           </div>
         </div>
