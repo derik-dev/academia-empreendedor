@@ -56,11 +56,14 @@ $year = gmdate('Y');
 $month = gmdate('m');
 $mediaRoot = rtrim((string) $config['MEDIA_DIR'], DIRECTORY_SEPARATOR);
 $targetDirectory = $mediaRoot . DIRECTORY_SEPARATOR . 'podcasts' . DIRECTORY_SEPARATOR . $year . DIRECTORY_SEPARATOR . $month;
-if (!is_dir($targetDirectory) && !@mkdir($targetDirectory, 0750, true) && !is_dir($targetDirectory)) {
+if (!is_dir($targetDirectory) && !@mkdir($targetDirectory, 0755, true) && !is_dir($targetDirectory)) {
     error_log('[academia-audio] Não foi possível preparar a pasta de destino.');
     respond(500, ['error' => 'Não foi possível guardar o áudio. Tente novamente.']);
 }
-@chmod($targetDirectory, 0750);
+// chmod explícito porque o umask do processo PHP pode reduzir as permissões do mkdir.
+if (!@chmod($targetDirectory, 0755)) {
+    error_log('[academia-audio] Não foi possível definir as permissões da pasta de destino.');
+}
 
 $safeOriginal = basename($originalName);
 $originalStem = pathinfo($safeOriginal, PATHINFO_FILENAME);
@@ -85,7 +88,11 @@ if (!move_uploaded_file($temporaryPath, $destination)) {
     error_log('[academia-audio] Falha ao guardar um áudio carregado.');
     respond(500, ['error' => 'Não foi possível guardar o áudio. Tente novamente.']);
 }
-@chmod($destination, 0640);
+// 0644: leitura pública necessária para o servidor web servir o MP3 directamente.
+// chmod explícito porque o umask pode produzir 0640, que devolve 403 ao visitante.
+if (!@chmod($destination, 0644)) {
+    error_log('[academia-audio] Não foi possível definir as permissões do ficheiro de áudio.');
+}
 
 $relativePath = 'podcasts/' . $year . '/' . $month . '/' . $filename;
 respond(201, [

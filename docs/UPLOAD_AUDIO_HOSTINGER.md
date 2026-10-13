@@ -24,6 +24,12 @@ As duas pastas novas ficam ao lado de `academia`, e não dentro de `public_html/
 
 O `.htaccess` da API bloqueia o acesso web a `config.php` e `common.php`. O ficheiro real de configuração também está ignorado pelo Git; nunca o copie para o repositório nem envie a chave por mensagem.
 
+## Permissões dos ficheiros
+
+O endpoint aplica `chmod 0644` nos MP3 enviados e `chmod 0755` nas pastas criadas automaticamente (`podcasts/AAAA/MM`). Estes valores são definidos explicitamente porque o umask do processo PHP pode reduzir as permissões definidas pelo `mkdir`, produzindo `0640` nos ficheiros — o que faz o servidor web devolver `403` ao tentar servir o áudio.
+
+Se após um upload o servidor continuar a devolver `403`, verifique as permissões directamente no Gestor de Ficheiros do hPanel: o MP3 deve ter `644` e as pastas pai `755`. Se necessário, corrija manualmente e confirme que o `umask` do PHP não está sobreposto nas definições do servidor.
+
 ## Aumentar os limites de PHP
 
 No hPanel, abra as definições PHP do domínio `netpubli.com.br` (normalmente **Avançado → Configuração PHP** ou o editor de `php.ini`). Use estes valores, se o plano os permitir:
