@@ -1,5 +1,5 @@
 Options -Indexes
 
-<FilesMatch "^config\.php$">
+<FilesMatch "^(config|common)\.php$">
     Require all denied
 </FilesMatch>

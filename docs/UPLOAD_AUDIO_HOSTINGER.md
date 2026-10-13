@@ -19,10 +19,10 @@ As duas pastas novas ficam ao lado de `academia`, e não dentro de `public_html/
 2. Edite **a cópia no servidor**, não o exemplo do repositório.
 3. Preencha `SUPABASE_URL` com o URL do projeto Supabase e `SUPABASE_ANON_KEY` com a chave pública anon/publishable do projeto. Não use a service role key.
 4. Em `ALLOWED_ORIGINS`, mantenha apenas a origem do site que abre o painel, normalmente `https://netpubli.com.br`. Se o painel também for usado em `https://www.netpubli.com.br`, inclua essa origem.
-5. Em `MEDIA_DIR`, indique o caminho absoluto da pasta `media-academia` mostrado pelo hPanel. Substitua o exemplo `/home/UTILIZADOR/...` pelo caminho real da sua conta.
+5. `MEDIA_DIR` é opcional: se a pasta `media-academia` estiver ao lado de `api-academia` dentro de `public_html`, pode deixar a chave comentada ou omiti-la — o endpoint resolve o caminho automaticamente usando `realpath(__DIR__ . '/../media-academia')`. Preencha apenas se a pasta estiver noutro local; nesse caso, indique o caminho absoluto mostrado pelo hPanel.
 6. Mantenha `MAX_BYTES` em `157286400` (150 MiB) e `MEDIA_BASE_URL` em `https://netpubli.com.br/media-academia/`.
 
-O `.htaccess` da API bloqueia o acesso web a `config.php`. O ficheiro real também está ignorado pelo Git; nunca o copie para o repositório nem envie a chave por mensagem.
+O `.htaccess` da API bloqueia o acesso web a `config.php` e `common.php`. O ficheiro real de configuração também está ignorado pelo Git; nunca o copie para o repositório nem envie a chave por mensagem.
 
 ## Aumentar os limites de PHP
 
