@@ -106,10 +106,10 @@ export function SearchHeader() {
   const [open, setOpen] = useState(false)
   const navigate = useNavigate()
   const { courses: publishedCourses } = usePublishedCourses()
-  const publishedSlugs = new Set(publishedCourses.map(item => item.slug))
-  const searchableAreas = [...areas.filter(item => !publishedSlugs.has(item.slug)), ...publishedCourses]
-  const normalizedQuery = query.trim().toLocaleLowerCase('pt-BR')
-  const matches = normalizedQuery ? searchableAreas.filter(item => `${item.title} ${item.category} ${item.author} ${item.description}`.toLocaleLowerCase('pt-BR').includes(normalizedQuery)).slice(0, 5) : []
+  const areaImages = Object.fromEntries(areas.map(a => [a.slug, a.image]))
+  const searchable = publishedCourses.map(c => ({ ...c, image: c.image || areaImages[c.slug] || '' }))
+  const normalizedQuery = query.trim().toLocaleLowerCase('pt-PT')
+  const matches = normalizedQuery ? searchable.filter(item => `${item.title} ${item.category} ${item.author} ${item.description}`.toLocaleLowerCase('pt-PT').includes(normalizedQuery)).slice(0, 5) : []
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (matches[0]) { navigate(`/assistir/${matches[0].slug}`); setQuery(''); setOpen(false) }
@@ -219,6 +219,7 @@ export function ProfilePage() {
       const { error } = await supabase.storage.from('avatars').upload(path, pendingBlob, { upsert: true, contentType: 'image/jpeg' })
       if (!error) {
         const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+        // eslint-disable-next-line react-hooks/purity
         const url = `${data.publicUrl}?t=${Date.now()}`
         metaUpdates.avatar_url = url; setAvatarUrl(url); setPendingBlob(null); setPendingPreview('')
       }
@@ -228,6 +229,7 @@ export function ProfilePage() {
       const { error } = await supabase.storage.from('avatars').upload(path, pendingCoverBlob, { upsert: true })
       if (!error) {
         const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+        // eslint-disable-next-line react-hooks/purity
         const url = `${data.publicUrl}?t=${Date.now()}`
         metaUpdates.cover_url = url; setCoverUrl(url); setPendingCoverBlob(null); setPendingCoverPreview('')
       }
