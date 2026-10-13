@@ -5,11 +5,11 @@ import { articleImage } from './blogImages'
 
 export function useArticles() {
   const [articles, setArticles] = useState<Article[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!supabase)
 
   useEffect(() => {
     let active = true
-    if (!supabase) { setLoading(false); return () => { active = false } }
+    if (!supabase) return () => { active = false }
     supabase
       .from('articles')
       .select('slug,title,excerpt,category,read_time,image_url,published_at')
