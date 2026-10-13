@@ -16,6 +16,7 @@ import { AdminSelect, type AdminSelectOption } from './AdminSelect'
 import { getYouTubeVideoId } from '../lib/youtube'
 import { correctText, generateArticle, sortLessonsByAI, type GenerateParams } from '../lib/groq'
 import { readAudioDuration } from '../lib/audioDuration'
+import { blankDraft, type CourseDraft, type LessonDraft } from '../lib/adminCourseDraft'
 
 async function readFnError(error: unknown, data: unknown, fallback: string): Promise<string> {
   if (data && typeof data === 'object' && 'error' in (data as object)) return String((data as Record<string, unknown>).error)
@@ -120,24 +121,8 @@ type DeleteCourseConfirmation = { id: string; title: string; audioPath: string |
 type CourseAccess = { id: string; user_id: string; course_slug: string; accessed_at: string }
 type LessonRow = { id: string; course_id: string; title: string; video_url: string | null; audio_path: string | null; duration_seconds: number; position: number; cover_url: string | null }
 type StudentRow = { id: string; name: string; email: string; created_at: string }
-type LessonDraft = { id: string; title: string; videoUrl: string; audioPath: string; durationSeconds: number; position: number; coverUrl: string }
 type PlaylistVideoItem = { videoId: string; title: string; videoUrl: string; durationSeconds: number }
 type ActiveLessonForm = { id: string; title: string; videoUrl: string; audioPath: string; originalAudioPath: string; audioFileName: string; durationText: string; coverFile: File | null; coverPreview: string; isNew: boolean }
-type CourseDraft = {
-  title: string; description: string; instructor: string; category: Course['category']
-  videoUrl: string; body: string; status: 'draft' | 'published' | 'scheduled'; scheduledFor: string
-  position: string; coverUrl: string; file: File | null; audioFile: File | null; audioPath: string
-  notesEnabled: boolean; lessonCount: string; durationText: string; level: Course['level']
-  lessons: LessonDraft[]; removedLessonIds: string[]; removedLessonAudioPaths: string[]; articleCategory: string; interviewAuthor: string
-  zoomType: string; zoomCategory: string
-}
-
-const blankDraft: CourseDraft = {
-  title: '', description: '', instructor: '', category: 'miniseries', videoUrl: '', body: '',
-  status: 'published', scheduledFor: '', position: '', coverUrl: '', file: null, audioFile: null, audioPath: '', notesEnabled: true, lessonCount: '', durationText: '',
-  level: null, lessons: [], removedLessonIds: [], removedLessonAudioPaths: [], articleCategory: 'Mentalidade', interviewAuthor: '',
-  zoomType: 'Aula', zoomCategory: '',
-}
 
 type AudioUploadResponse = { path: string; url: string; bytes: number; mime: string }
 
@@ -799,7 +784,10 @@ export function AdminCoursesPage() {
     }
     // Queue old lesson audio for cleanup if it was replaced
     if (originalAudioPath && originalAudioPath !== audioPath && safeResolveAudioSource(originalAudioPath)?.kind === 'host') {
-      setDraft(d => ({ ...d, removedLessonAudioPaths: d.removedLessonAudioPaths.includes(originalAudioPath) ? d.removedLessonAudioPaths : [...d.removedLessonAudioPaths, originalAudioPath] }))
+      setDraft(d => {
+        const existing = d.removedLessonAudioPaths ?? []
+        return { ...d, removedLessonAudioPaths: existing.includes(originalAudioPath) ? existing : [...existing, originalAudioPath] }
+      })
     }
     if (isNew) {
       setDraft(d => ({ ...d, lessons: [...d.lessons, { id, title: title.trim(), videoUrl: videoUrl.trim(), audioPath: audioPath.trim(), durationSeconds, coverUrl: finalCoverUrl, position: d.lessons.length }] }))
@@ -813,13 +801,14 @@ export function AdminCoursesPage() {
     setDraft(d => {
       const lesson = d.lessons.find(l => l.id === lessonId)
       const hasHostAudio = lesson?.audioPath && safeResolveAudioSource(lesson.audioPath)?.kind === 'host'
+      const existingAudioPaths = d.removedLessonAudioPaths ?? []
       return {
         ...d,
         lessons: d.lessons.filter(l => l.id !== lessonId),
         removedLessonIds: [...d.removedLessonIds, lessonId],
-        removedLessonAudioPaths: hasHostAudio && lesson?.audioPath && !d.removedLessonAudioPaths.includes(lesson.audioPath)
-          ? [...d.removedLessonAudioPaths, lesson.audioPath]
-          : d.removedLessonAudioPaths,
+        removedLessonAudioPaths: hasHostAudio && lesson?.audioPath && !existingAudioPaths.includes(lesson.audioPath)
+          ? [...existingAudioPaths, lesson.audioPath]
+          : existingAudioPaths,
       }
     })
     if (activeLessonForm?.id === lessonId) setActiveLessonForm(null)
@@ -942,7 +931,7 @@ export function AdminCoursesPage() {
         }
       }
       const queuedDeletions = [...audioDeleteQueue]
-      const queuedLessonAudioDeletions = [...draft.removedLessonAudioPaths]
+      const queuedLessonAudioDeletions = [...(draft.removedLessonAudioPaths ?? [])]
       const successMsg = draft.status === 'published'
         ? (section === 'courses' ? 'Minissérie publicada na biblioteca.' : 'Conteúdo publicado na biblioteca.')
         : draft.status === 'scheduled'
