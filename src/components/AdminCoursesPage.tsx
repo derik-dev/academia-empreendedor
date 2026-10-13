@@ -941,10 +941,10 @@ export function AdminCoursesPage() {
                     <span className={`admin-course-status ${course.status}`}><span className="admin-status-dot"/>{course.status === 'published' ? 'Publicado' : course.status === 'scheduled' ? 'Agendado' : 'Rascunho'}</span>
                     <span className="admin-course-row-date"><CalendarDays size={12}/> {dateLabel(course.created_at)}</span>
                   </div>
-                  <div className="admin-course-row-actions" onClick={e => e.stopPropagation()}>
-                    <Link to={publicUrl} className="admin-icon-button" title="Ver página"><Eye size={15}/></Link>
-                    <button type="button" className="admin-icon-button" onClick={() => void editCourse(course)} title="Editar"><Pencil size={15}/></button>
-                    <button type="button" className="admin-icon-button admin-icon-button--danger" onClick={() => void deleteCourse(course)} title="Excluir"><Trash2 size={15}/></button>
+                  <div className="admin-course-row-actions">
+                    <Link to={publicUrl} className="admin-icon-button" title="Ver página" onClick={e => e.stopPropagation()}><Eye size={15}/></Link>
+                    <button type="button" className="admin-icon-button" onClick={e => { e.stopPropagation(); void editCourse(course) }} title="Editar"><Pencil size={15}/></button>
+                    <button type="button" className="admin-icon-button admin-icon-button--danger" onClick={e => { e.stopPropagation(); deleteCourse(course) }} title="Excluir"><Trash2 size={15}/></button>
                   </div>
                 </article>
               })}</div>

@@ -20,7 +20,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const validate = async () => {
       try {
         const { error } = await supabase!.auth.getUser()
-        if (error) await supabase!.auth.signOut({ scope: 'local' })
+        if (error) {
+          // 403 = servidor recusou mas token pode ser válido (ex: rate limit); 401 = sessão inválida de facto
+          const status = (error as { status?: number }).status
+          if (status !== 403) await supabase!.auth.signOut({ scope: 'local' })
+        }
       } catch { /* rede indisponível — não deslogar */ }
     }
     const id = window.setInterval(validate, 300_000)
