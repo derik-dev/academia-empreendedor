@@ -25,7 +25,7 @@ Never put secrets, `service_role` keys, or `OPENAI_API_KEY` in `VITE_*` variable
 
 **Stack:** React 18 + TypeScript + Vite SPA, Supabase for auth/DB/storage, React Router v6, Lucide icons.
 
-**Deployment path:** The entire app is served under `/plataforma/`. Vite's `base`, React Router's `basename`, and the Apache `.htaccess` fallback all use this prefix. The landing page at `/academia` is separate and must not be overwritten.
+**Deployment path:** The entire app is served under `/academia/`. Vite's `base`, React Router's `basename`, and the Apache `.htaccess` fallback all use this prefix. The landing page at `/` is separate and must not be overwritten.
 
 **Single-file app:** Almost all page-level components live in `src/App.tsx`. Route definitions are at the bottom of that file. Shell/sidebar/profile utilities are in `src/components/Chrome.tsx`.
 
