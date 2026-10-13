@@ -15,11 +15,11 @@ export type ZoomRecording = {
 
 export function useZoomRecordings() {
   const [recordings, setRecordings] = useState<ZoomRecording[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!supabase)
 
   useEffect(() => {
     let active = true
-    if (!supabase) { setLoading(false); return () => { active = false } }
+    if (!supabase) return () => { active = false }
     supabase
       .from('zoom_recordings')
       .select('id,title,description,type,category,duration,thumb_url,video_url,recorded_at')

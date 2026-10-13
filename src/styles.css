@@ -2003,6 +2003,15 @@ button.watch-playlist-item{width:100%}
 .admin-audio-progress-bar{flex:1;height:5px;border-radius:3px;background:#0e1f30;overflow:hidden}
 .admin-audio-progress-fill{height:100%;background:linear-gradient(90deg,#1d7ec7,#5aaeff);border-radius:3px;transition:width .15s}
 .admin-audio-progress-wrap>span{flex:none;font-size:11px;color:#6a8caa;min-width:32px;text-align:right}
+.admin-audio-preview{display:block;width:100%;height:40px;margin:0 0 10px;border-radius:7px}
+.admin-audio-preview-note{margin:0 0 10px;color:#b8d0e8;font-size:12px}
+.admin-audio-help{margin-top:10px;padding:12px;border:1px solid rgba(29,126,199,.2);border-radius:8px;background:#080e17;color:#b8d0e8;font-size:12px;line-height:1.55}
+.admin-audio-help>strong{color:#fff;font-size:13px}
+.admin-audio-help ol{margin:8px 0;padding-left:20px}
+.admin-audio-help code{display:block;overflow-wrap:anywhere;color:#7ab3d4;font-size:11px}
+.admin-audio-cancel-btn{flex:none;padding:3px 8px;border:1px solid rgba(239,68,68,.3);border-radius:6px;background:rgba(239,68,68,.08);color:#f87171;font-size:11px;cursor:pointer}
+.admin-audio-delete-choice{display:flex;align-items:center;gap:8px;margin:12px 0;color:#fff}
+.admin-audio-confirm-actions{flex-wrap:wrap}
 
 /* Spinner para botão de play do podcast durante carregamento de URL assinada */
 .podcast-play-spinner{animation:spin .8s linear infinite;opacity:.7}

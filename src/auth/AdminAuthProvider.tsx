@@ -77,8 +77,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (identifier: string, password: string) => {
     if (!adminSupabase) return 'O Supabase ainda não está configurado. Preencha as variáveis do arquivo .env.'
-    const normalizedIdentifier = identifier.trim().toLowerCase()
-    const email = normalizedIdentifier === 'ericeenio' ? 'ericeenio@gmail.com' : normalizedIdentifier
+    const email = identifier.trim().toLowerCase()
     const { data, error } = await adminSupabase.auth.signInWithPassword({ email, password })
     if (error || !data.user) {
       if (error?.code === 'email_not_confirmed') return 'Confirme seu endereço de e-mail antes de entrar.'

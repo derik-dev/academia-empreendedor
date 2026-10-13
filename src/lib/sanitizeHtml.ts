@@ -1,5 +1,11 @@
 import DOMPurify from 'dompurify'
 
+DOMPurify.addHook('afterSanitizeAttributes', node => {
+  if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
 const ALLOWED_TAGS = [
   'p', 'br', 'strong', 'em', 'b', 'i', 'u', 's',
   'h1', 'h2', 'h3', 'h4',

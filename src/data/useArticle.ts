@@ -5,12 +5,13 @@ import { articleImage } from './blogImages'
 
 export function useArticle(slug: string | undefined) {
   const [article, setArticle] = useState<Article | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!supabase && !!slug)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!slug) { setLoading(false); return }
     let active = true
-    if (!supabase) { setLoading(false); return () => { active = false } }
+    if (!supabase) return () => { active = false }
     supabase
       .from('articles')
       .select('slug,title,excerpt,category,read_time,image_url,published_at,content,video_url')

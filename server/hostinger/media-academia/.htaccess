@@ -1,0 +1,9 @@
+Options -Indexes
+
+<FilesMatch "(?i)\.(php[0-9]*|phtml|phar)$">
+    Require all denied
+</FilesMatch>
+
+<FilesMatch "(?i)\.mp3$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>

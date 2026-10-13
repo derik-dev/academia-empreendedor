@@ -6,6 +6,13 @@ export interface YouTubePlayerInstance {
   getDuration(): number
   getPlayerState(): YouTubePlayerStateCode
   seekTo(seconds: number, allowSeekAhead: boolean): void
+  playVideo(): void
+  pauseVideo(): void
+  setVolume(volume: number): void
+}
+
+export interface YouTubeReadyEvent {
+  target: YouTubePlayerInstance
 }
 
 export interface YouTubePlayerEvent {
@@ -20,18 +27,11 @@ export interface YouTubePlayerErrorEvent {
 
 export interface YouTubePlayerOptions {
   videoId: string
-  playerVars: {
-    controls: 1
-    enablejsapi: 1
-    fs: 1
-    origin: string
-    rel: 0
-    playsinline: 1
-  }
-  events: {
-    onReady: (event: YouTubePlayerEvent) => void
-    onStateChange: (event: YouTubePlayerEvent) => void
-    onError: (event: YouTubePlayerErrorEvent) => void
+  playerVars?: Record<string, number | string | boolean>
+  events?: {
+    onReady?: (event: YouTubeReadyEvent) => void
+    onStateChange?: (event: YouTubePlayerEvent) => void
+    onError?: (event: YouTubePlayerErrorEvent) => void
   }
 }
 

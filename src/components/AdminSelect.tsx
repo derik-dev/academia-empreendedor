@@ -54,7 +54,7 @@ export function AdminSelect({ value, options, onChange, ariaLabel, className = '
       openMenu(event.key === 'ArrowDown' ? Math.max(0, options.findIndex(option => option.value === value)) : Math.max(0, options.findIndex(option => option.value === value)))
     } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
-      open ? choose(options[activeIndex]) : openMenu()
+      if (open) choose(options[activeIndex]); else openMenu()
     }
   }
 

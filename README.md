@@ -12,7 +12,7 @@ Nunca use chaves secretas, `service_role` ou `OPENAI_API_KEY` em variáveis `VIT
 
 ## Endereços e publicação
 
-A aplicação está configurada para ser publicada sob `/plataforma/`. O `base` do Vite, o `basename` do React Router e o fallback do Apache seguem esse prefixo. Publique os arquivos de `dist/` no diretório web correspondente a `/plataforma/`. A página de vendas em `/academia` é independente e não deve ser sobrescrita por esse bundle.
+A aplicação está configurada para ser publicada sob `/academia/`. O `base` do Vite, o `basename` do React Router e o fallback do Apache seguem esse prefixo. Publique os arquivos de `dist/` no diretório web correspondente a `/academia/`. Para publicar em outro caminho, defina `VITE_BASE_PATH` no ambiente de build e atualize o `RewriteBase` no `.htaccess`. A página de vendas em `/` é independente e não deve ser sobrescrita por esse bundle.
 
 ## Banco de dados e migrations
 

@@ -4,11 +4,11 @@ import type { Interview } from '../types/interview'
 
 export function useInterviews() {
   const [interviews, setInterviews] = useState<Interview[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!!supabase)
 
   useEffect(() => {
     let active = true
-    if (!supabase) { setLoading(false); return () => { active = false } }
+    if (!supabase) return () => { active = false }
     supabase
       .from('interviews')
       .select('slug,title,subtitle,guest,guest_role,author,duration,video_id,thumb_url,published_at')
