@@ -104,9 +104,6 @@ function MinisSeriesPage() {
   const { courses: libraryCourses, loading: coursesLoading } = useLibraryCourses()
   const items = libraryCourses.filter(item => item.category === 'Minisséries')
   const [progress, setProgress] = useState<Record<string, { percent: number; completed: boolean }>>({})
-  const gridRef = useRef<HTMLDivElement>(null)
-  const [cardWidth, setCardWidth] = useState(0)
-
   useEffect(() => {
     if (!supabase || !user) return
     let active = true
@@ -122,19 +119,6 @@ function MinisSeriesPage() {
       })
     return () => { active = false }
   }, [user])
-
-  useEffect(() => {
-    const grid = gridRef.current
-    if (!grid) return
-    const measure = () => {
-      const columns = window.getComputedStyle(grid).gridTemplateColumns.split(' ').length
-      setCardWidth((grid.clientWidth - 16 * (columns - 1)) / columns)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(grid)
-    return () => ro.disconnect()
-  }, [items.length])
 
   return <div className="app-shell app-shell--home">
     <Sidebar />
@@ -160,7 +144,7 @@ function MinisSeriesPage() {
         <h2>Explore as minisséries</h2>
         <div className="ms-hero-search"><SearchHeader /></div>
       </div>
-      <div className="ms-card-grid" ref={gridRef}>
+      <div className="ms-card-grid">
         {items.map(item => {
           const itemProgress = progress[item.slug]
           const percent = Math.min(100, Math.max(0, Math.round(itemProgress?.completed ? 100 : itemProgress?.percent ?? 0)))
@@ -168,10 +152,9 @@ function MinisSeriesPage() {
           const professorPhoto = item.professorImage || getProfessorPhoto(authorName)
           const shownLesson = item.lessons?.[0]
           const durationLabel = item.durationText || (shownLesson?.durationSeconds ? formatPodcastTime(shownLesson.durationSeconds) : (item.videoCount ?? 0) > 0 ? item.videoCount + ' aulas' : 'Em breve')
-          const thumbnailHeight = cardWidth > 300 ? Math.max(0, (cardWidth - 14) * 9 / 16 - 70) : undefined
           const lessonDetail = shownLesson ? 'Aula ' + (shownLesson.position + 1) + ' • ' + shownLesson.title : item.status === 'published' ? 'Aula disponível • Minissérie' : 'Conteúdo em breve'
           return <article className="home-learning-card" key={item.slug}>
-            <Link to={'/assistir/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
+            <Link to={'/assistir/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title}>
               <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
               <span className="home-video-count">{durationLabel}</span>
             </Link>
@@ -745,8 +728,6 @@ function InterviewsPage() {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<SortKey>('recentes')
   const [showSort, setShowSort] = useState(false)
-  const gridRef = useRef<HTMLDivElement>(null)
-  const [cardWidth, setCardWidth] = useState(0)
   const ivFilters = ['Todos', 'Negócios', 'Mentalidade', 'Marketing', 'Vendas', 'Produtividade', 'Gestão', 'Carreira']
 
   const interviews = [...allInterviews]
@@ -760,19 +741,6 @@ function InterviewsPage() {
       if (sortBy === 'antigos') return allInterviews.indexOf(b) - allInterviews.indexOf(a)
       return 0
     })
-
-  useEffect(() => {
-    const grid = gridRef.current
-    if (!grid) return
-    const measure = () => {
-      const columns = window.getComputedStyle(grid).gridTemplateColumns.split(' ').length
-      setCardWidth((grid.clientWidth - 16 * (columns - 1)) / columns)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(grid)
-    return () => ro.disconnect()
-  }, [interviews.length])
 
   return <div className="app-shell app-shell--home">
     <Sidebar />
@@ -812,13 +780,12 @@ function InterviewsPage() {
         {ivFilters.map(f => <button type="button" key={f} className={`iv-filter-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>{f === 'Todos' && <LayoutGrid size={13}/>}{f}</button>)}
       </div>
       {!loading && interviews.length === 0 && <div style={{padding:'40px 0',textAlign:'center',color:'#5a7a9a',fontSize:14}}>Nenhuma entrevista encontrada.</div>}
-      <div className="iv-card-grid" ref={gridRef}>
+      <div className="iv-card-grid">
         {interviews.map(iv => {
-          const thumbnailHeight = cardWidth > 300 ? Math.max(0, (cardWidth - 14) * 9 / 16 - 70) : undefined
           const authorName = iv.author || iv.guest
           const authorPhoto = getProfessorPhoto(authorName)
           return <article className="home-learning-card iv-home-card" key={iv.slug}>
-            <Link to={`/entrevistas/${iv.slug}`} className="home-learning-image" aria-label={`Assistir ${iv.title}`} style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
+            <Link to={`/entrevistas/${iv.slug}`} className="home-learning-image" aria-label={`Assistir ${iv.title}`}>
               <img src={interviewThumb(iv.thumb)} alt=""/>
               <span className="home-video-count">{iv.duration}</span>
             </Link>
@@ -876,8 +843,6 @@ function ZoomPage() {
 
   const [filter, setFilter] = useState('Todos')
   const [search, setSearch] = useState('')
-  const zoomGridRef = useRef<HTMLDivElement>(null)
-  const [zoomCardWidth, setZoomCardWidth] = useState(0)
   const zoomFilters = ['Todos', 'Aulas', 'Mentorias', 'Workshops', 'Vendas', 'Marketing', 'Gestão', 'Produtividade', 'Planejamento']
 
   const filtered = recordings.filter(r => {
@@ -886,19 +851,6 @@ function ZoomPage() {
     const matchSearch = !q || normalizeSearch(r.title).includes(q) || normalizeSearch(r.description).includes(q)
     return matchType && matchSearch
   })
-
-  useEffect(() => {
-    const grid = zoomGridRef.current
-    if (!grid) return
-    const measure = () => {
-      const columns = window.getComputedStyle(grid).gridTemplateColumns.split(' ').length
-      setZoomCardWidth((grid.clientWidth - 16 * (columns - 1)) / columns)
-    }
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(grid)
-    return () => ro.disconnect()
-  }, [filtered.length])
 
   return (
     <div className="app-shell app-shell--home">
@@ -946,11 +898,10 @@ function ZoomPage() {
                   <button type="button" className="zoom-sort-btn"><SlidersHorizontal size={13}/> Mais recentes <ChevronDown size={12}/></button>
                 </div>
 
-                <div className="zoom-list" ref={zoomGridRef}>
+                <div className="zoom-list">
                   {filtered.map(r => {
-                    const thumbnailHeight = zoomCardWidth > 300 ? Math.max(0, (zoomCardWidth - 14) * 9 / 16 - 70) : undefined
                     return <article key={r.id} className="home-learning-card zoom-home-card">
-                      <div className="home-learning-image" style={thumbnailHeight ? {height: thumbnailHeight + 'px', aspectRatio: 'auto'} : undefined}>
+                      <div className="home-learning-image">
                         <img src={r.thumb} alt={r.title}/>
                         <span className="home-video-count">{r.duration}</span>
                       </div>
