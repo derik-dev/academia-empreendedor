@@ -16,6 +16,7 @@ import { AdminSelect, type AdminSelectOption } from './AdminSelect'
 import { getYouTubeVideoId } from '../lib/youtube'
 import { correctText, generateArticle, sortLessonsByAI, type GenerateParams } from '../lib/groq'
 import { readAudioDuration } from '../lib/audioDuration'
+import { blankDraft, type CourseDraft, type LessonDraft } from '../lib/adminCourseDraft'
 
 async function readFnError(error: unknown, data: unknown, fallback: string): Promise<string> {
   if (data && typeof data === 'object' && 'error' in (data as object)) return String((data as Record<string, unknown>).error)
@@ -118,26 +119,10 @@ export type Course = {
 }
 type DeleteCourseConfirmation = { id: string; title: string; audioPath: string | null }
 type CourseAccess = { id: string; user_id: string; course_slug: string; accessed_at: string }
-type LessonRow = { id: string; course_id: string; title: string; video_url: string; duration_seconds: number; position: number; cover_url: string | null }
+type LessonRow = { id: string; course_id: string; title: string; video_url: string | null; audio_path: string | null; duration_seconds: number; position: number; cover_url: string | null }
 type StudentRow = { id: string; name: string; email: string; created_at: string }
-type LessonDraft = { id: string; title: string; videoUrl: string; durationSeconds: number; position: number; coverUrl: string }
 type PlaylistVideoItem = { videoId: string; title: string; videoUrl: string; durationSeconds: number }
-type ActiveLessonForm = { id: string; title: string; videoUrl: string; durationText: string; coverFile: File | null; coverPreview: string; isNew: boolean }
-type CourseDraft = {
-  title: string; description: string; instructor: string; category: Course['category']
-  videoUrl: string; body: string; status: 'draft' | 'published' | 'scheduled'; scheduledFor: string
-  position: string; coverUrl: string; file: File | null; audioFile: File | null; audioPath: string
-  notesEnabled: boolean; lessonCount: string; durationText: string; level: Course['level']
-  lessons: LessonDraft[]; removedLessonIds: string[]; articleCategory: string; interviewAuthor: string
-  zoomType: string; zoomCategory: string
-}
-
-const blankDraft: CourseDraft = {
-  title: '', description: '', instructor: '', category: 'miniseries', videoUrl: '', body: '',
-  status: 'published', scheduledFor: '', position: '', coverUrl: '', file: null, audioFile: null, audioPath: '', notesEnabled: true, lessonCount: '', durationText: '',
-  level: null, lessons: [], removedLessonIds: [], articleCategory: 'Mentalidade', interviewAuthor: '',
-  zoomType: 'Aula', zoomCategory: '',
-}
+type ActiveLessonForm = { id: string; title: string; videoUrl: string; audioPath: string; originalAudioPath: string; audioFileName: string; durationText: string; coverFile: File | null; coverPreview: string; isNew: boolean }
 
 type AudioUploadResponse = { path: string; url: string; bytes: number; mime: string }
 
@@ -227,7 +212,7 @@ const sectionCats: Partial<Record<AdminSection, Course['category'][]>> = {
 }
 const sectionMeta: Partial<Record<AdminSection, { item: string; plural: string; eyebrow: string; titleLabel: string; authorLabel: string; videoLabel: string }>> = {
   courses:    { item: 'minissérie', plural: 'minisséries', eyebrow: 'MINISSÉRIES', titleLabel: 'Título da minissérie', authorLabel: 'Autor', videoLabel: 'Link da aula' },
-  podcasts:   { item: 'podcast',    plural: 'podcasts',    eyebrow: 'PODCASTS',     titleLabel: 'Título do podcast',    authorLabel: 'Participantes',  videoLabel: 'Link do áudio' },
+  podcasts:   { item: 'podcast',    plural: 'podcasts',    eyebrow: 'PODCASTS',     titleLabel: 'Título do podcast',    authorLabel: 'Autores',        videoLabel: 'Link do áudio' },
   interviews: { item: 'entrevista', plural: 'entrevistas', eyebrow: 'ENTREVISTAS',  titleLabel: 'Título da entrevista', authorLabel: 'Convidado',      videoLabel: 'Link do vídeo' },
   zoom:       { item: 'gravação',   plural: 'gravações',   eyebrow: 'GRAVAÇÕES',    titleLabel: 'Título da gravação',   authorLabel: 'Apresentador',   videoLabel: 'Link do vídeo' },
   blog:       { item: 'artigo',     plural: 'artigos',     eyebrow: 'BLOG',         titleLabel: 'Título do artigo',     authorLabel: 'Autor',          videoLabel: 'Link do vídeo' },
@@ -368,11 +353,11 @@ export function AdminCoursesPage() {
   const [playlistItems, setPlaylistItems] = useState<PlaylistVideoItem[]>([])
   const [playlistSelected, setPlaylistSelected] = useState<Set<string>>(new Set())
   const [playlistError, setPlaylistError] = useState('')
-  const [audioUploadProgress, setAudioUploadProgress] = useState(0)
-  const [audioUploading, setAudioUploading] = useState(false)
   const [audioDeleteQueue, setAudioDeleteQueue] = useState<string[]>([])
-  const audioUploadAbortRef = useRef<AbortController | null>(null)
-  const audioUploadLockRef = useRef(false)
+  const [lessonAudioUploading, setLessonAudioUploading] = useState(false)
+  const [lessonAudioUploadProgress, setLessonAudioUploadProgress] = useState(0)
+  const lessonAudioUploadAbortRef = useRef<AbortController | null>(null)
+  const lessonAudioUploadLockRef = useRef(false)
   const [aiCorrectLoading, setAiCorrectLoading] = useState(false)
   const [aiSortLoading, setAiSortLoading] = useState(false)
   const [aiSortDone, setAiSortDone] = useState(false)
@@ -422,8 +407,11 @@ export function AdminCoursesPage() {
     try {
       // Segurança: não apagar se outro conteúdo usa o mesmo arquivo de áudio.
       if (adminSupabase) {
-        const { data: sharing } = await adminSupabase.from('courses').select('id').eq('audio_path', audioPath).limit(1)
-        if (sharing && sharing.length > 0) {
+        const [{ data: sharingCourses }, { data: sharingLessons }] = await Promise.all([
+          adminSupabase.from('courses').select('id').eq('audio_path', audioPath).limit(1),
+          adminSupabase.from('lessons').select('id').eq('audio_path', audioPath).limit(1),
+        ])
+        if ((sharingCourses && sharingCourses.length > 0) || (sharingLessons && sharingLessons.length > 0)) {
           console.warn('[academia] Áudio não apagado: referenciado por outro conteúdo.')
           return
         }
@@ -440,64 +428,60 @@ export function AdminCoursesPage() {
     }
   }
 
-  const startAudioUpload = async (file: File, oldHostPathToDelete?: string) => {
-    if (audioUploadLockRef.current || saving) return
-    audioUploadLockRef.current = true
-    setAudioUploading(true)
-    setAudioUploadProgress(1)
-    setError('')
+  const startLessonAudioUpload = async (file: File) => {
+    if (lessonAudioUploadLockRef.current || saving) return
+    lessonAudioUploadLockRef.current = true
+    setLessonAudioUploading(true)
+    setLessonAudioUploadProgress(1)
+    setLessonFormError('')
     const controller = new AbortController()
-    audioUploadAbortRef.current = controller
+    lessonAudioUploadAbortRef.current = controller
     try {
       let duration = 0
       try { duration = await readAudioDuration(file) } catch { /* A duração continua editável manualmente. */ }
       const token = await getAdminAccessToken()
       const uploadUrl = import.meta.env.VITE_AUDIO_UPLOAD_URL
       if (!uploadUrl) throw new Error('Envio de áudio não disponível. Contacte o suporte técnico.')
-      const result = await uploadAudioWithProgress(uploadUrl, file, token, setAudioUploadProgress, controller.signal)
-      setDraft(current => ({
-        ...current,
-        audioFile: file,
-        audioPath: `host:${result.path}`,
-        durationText: current.durationText.trim() || !duration ? current.durationText : formatAudioDuration(duration),
-      }))
-      if (oldHostPathToDelete && safeResolveAudioSource(oldHostPathToDelete)?.kind === 'host') {
-        setAudioDeleteQueue(current => current.includes(oldHostPathToDelete) ? current : [...current, oldHostPathToDelete])
-      }
-      setNotice('Áudio enviado. Pode ouvi-lo na pré-visualização antes de guardar.')
+      const result = await uploadAudioWithProgress(uploadUrl, file, token, setLessonAudioUploadProgress, controller.signal)
+      setActiveLessonForm(f => {
+        if (!f) return f
+        return { ...f, audioPath: `host:${result.path}`, audioFileName: file.name, durationText: f.durationText.trim() || !duration ? f.durationText : formatAudioDuration(duration) }
+      })
     } catch (caught) {
-      setDraft(current => ({ ...current, audioFile: null }))
-      if (caught instanceof DOMException && caught.name === 'AbortError') setNotice('Envio de áudio cancelado.')
-      else setError(errorMessage(caught))
+      if (caught instanceof DOMException && caught.name === 'AbortError') setLessonFormError('Envio de áudio cancelado.')
+      else setLessonFormError(caught instanceof Error ? caught.message : 'Não foi possível enviar o áudio.')
     } finally {
-      audioUploadLockRef.current = false
-      audioUploadAbortRef.current = null
-      setAudioUploading(false)
-      setAudioUploadProgress(0)
+      lessonAudioUploadLockRef.current = false
+      lessonAudioUploadAbortRef.current = null
+      setLessonAudioUploading(false)
+      setLessonAudioUploadProgress(0)
     }
   }
 
-  const handleAudioFile = (file: File | null) => {
+  const handleLessonAudioFile = (file: File | null) => {
     if (!file) return
     const extensionIsMp3 = file.name.toLowerCase().endsWith('.mp3')
     const mimeIsMp3 = !file.type || file.type === 'audio/mpeg' || file.type === 'audio/mp3' || file.type === 'application/octet-stream'
-    if (!extensionIsMp3 || !mimeIsMp3) {
-      setError('Envie apenas ficheiros MP3. Converta o WAV para MP3 antes de enviar.')
-      return
-    }
-    if (file.size > MAX_AUDIO_BYTES) {
-      setError('O ficheiro não pode ter mais de 150 MB.')
-      return
-    }
-    setError('')
-    // Se já havia áudio hospedado, enfileira para remoção automática após salvar.
-    const oldPath = draft.audioPath
-    void startAudioUpload(file, safeResolveAudioSource(oldPath)?.kind === 'host' ? oldPath : undefined)
+    if (!extensionIsMp3 || !mimeIsMp3) { setLessonFormError('Envie apenas ficheiros MP3. Converta o WAV para MP3 antes de enviar.'); return }
+    if (file.size > MAX_AUDIO_BYTES) { setLessonFormError('O ficheiro não pode ter mais de 150 MB.'); return }
+    setLessonFormError('')
+    void startLessonAudioUpload(file)
   }
 
-  const cancelAudioUpload = () => audioUploadAbortRef.current?.abort()
+  const cancelLessonAudioUpload = () => lessonAudioUploadAbortRef.current?.abort()
 
-  const draftAudioSource = safeResolveAudioSource(draft.audioPath)
+  const convertToEpisode = () => {
+    if (!draft.audioPath) return
+    const episodeId = crypto.randomUUID()
+    const episode: LessonDraft = {
+      id: episodeId, title: draft.title.trim() || 'Episódio 1', videoUrl: '',
+      audioPath: draft.audioPath, durationSeconds: parseDurationInput(draft.durationText),
+      position: 0, coverUrl: draft.coverUrl,
+    }
+    setDraft(d => ({ ...d, audioPath: '', lessons: [episode] }))
+  }
+
+
 
   const loadDashboard = useCallback(async () => {
     const client = adminSupabase
@@ -583,7 +567,7 @@ export function AdminCoursesPage() {
   }
 
   const resetForm = useCallback(() => {
-    audioUploadAbortRef.current?.abort()
+    lessonAudioUploadAbortRef.current?.abort()
     setAudioDeleteQueue([])
     setDraft({ ...blankDraft, category: sectionCategory[section] ?? 'miniseries', instructor: section === 'courses' ? PROFESSOR_OPTIONS[0].value : '' })
     setEditingId(null)
@@ -638,14 +622,21 @@ export function AdminCoursesPage() {
   }
 
   const openLessonEdit = (lesson: LessonDraft) => {
-    setActiveLessonForm({ id: lesson.id, title: lesson.title, videoUrl: lesson.videoUrl, durationText: lesson.durationSeconds > 0 ? formatDurationSeconds(lesson.durationSeconds) : '', coverFile: null, coverPreview: lesson.coverUrl, isNew: false })
+    setActiveLessonForm({ id: lesson.id, title: lesson.title, videoUrl: lesson.videoUrl, audioPath: lesson.audioPath, originalAudioPath: lesson.audioPath, audioFileName: '', durationText: lesson.durationSeconds > 0 ? formatDurationSeconds(lesson.durationSeconds) : '', coverFile: null, coverPreview: lesson.coverUrl, isNew: false })
     setLessonFormError('')
   }
   const addNewLesson = () => {
-    setActiveLessonForm({ id: crypto.randomUUID(), title: '', videoUrl: '', durationText: '', coverFile: null, coverPreview: '', isNew: true })
+    setActiveLessonForm({ id: crypto.randomUUID(), title: '', videoUrl: '', audioPath: '', originalAudioPath: '', audioFileName: '', durationText: '', coverFile: null, coverPreview: '', isNew: true })
     setLessonFormError('')
   }
-  const cancelLessonForm = () => { setActiveLessonForm(null); setLessonFormError('') }
+  const cancelLessonForm = () => {
+    lessonAudioUploadAbortRef.current?.abort()
+    if (activeLessonForm && activeLessonForm.audioPath && activeLessonForm.audioPath !== activeLessonForm.originalAudioPath && safeResolveAudioSource(activeLessonForm.audioPath)?.kind === 'host') {
+      void deleteHostedAudioSilently(activeLessonForm.audioPath)
+    }
+    setActiveLessonForm(null)
+    setLessonFormError('')
+  }
 
   const openPlaylistImport = () => { setPlaylistImportOpen(true); setPlaylistUrl(''); setPlaylistItems([]); setPlaylistSelected(new Set()); setPlaylistError('') }
   const closePlaylistImport = () => { setPlaylistImportOpen(false); setPlaylistUrl(''); setPlaylistItems([]); setPlaylistSelected(new Set()); setPlaylistError('') }
@@ -674,7 +665,7 @@ export function AdminCoursesPage() {
     const extractNum = (title: string) => { const m = title.match(/\d+/g); return m ? parseInt(m[m.length - 1]) : 0 }
     const sorted = [...toAdd].sort((a, b) => extractNum(a.title) - extractNum(b.title))
     const startPos = draft.lessons.length
-    setDraft(d => ({ ...d, lessons: [...d.lessons, ...sorted.map((v, i) => ({ id: crypto.randomUUID(), title: v.title, videoUrl: v.videoUrl, durationSeconds: v.durationSeconds, position: startPos + i, coverUrl: `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg` }))] }))
+    setDraft(d => ({ ...d, lessons: [...d.lessons, ...sorted.map((v, i) => ({ id: crypto.randomUUID(), title: v.title, videoUrl: v.videoUrl, audioPath: '', durationSeconds: v.durationSeconds, position: startPos + i, coverUrl: `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg` }))] }))
     closePlaylistImport()
   }
   const setLessonVideoUrl = (url: string) => {
@@ -701,11 +692,17 @@ export function AdminCoursesPage() {
     })
   }
   const confirmLessonForm = async () => {
-    if (!activeLessonForm || lessonSaving) return
-    const { id, title, videoUrl, durationText, coverFile, coverPreview, isNew } = activeLessonForm
-    if (!title.trim()) { setLessonFormError('Informe o título da aula.'); return }
-    if (!videoUrl.trim()) { setLessonFormError('Informe o link do YouTube.'); return }
-    if (!getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Link do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
+    if (!activeLessonForm || lessonSaving || lessonAudioUploading) return
+    const { id, title, videoUrl, audioPath, originalAudioPath, durationText, coverFile, coverPreview, isNew } = activeLessonForm
+    const isPodcast = section === 'podcasts'
+    if (!title.trim()) { setLessonFormError(`Informe o título ${isPodcast ? 'do episódio' : 'da aula'}.`); return }
+    if (!isPodcast) {
+      if (!videoUrl.trim()) { setLessonFormError('Informe o link do YouTube.'); return }
+      if (!getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Link do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
+    } else {
+      if (!audioPath.trim() && !videoUrl.trim()) { setLessonFormError('Adicione um ficheiro MP3 ou um link de YouTube para o episódio.'); return }
+      if (videoUrl.trim() && !getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Link do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
+    }
     const durationSeconds = parseDurationInput(durationText)
     let finalCoverUrl = coverPreview
     if (coverFile && adminSupabase) {
@@ -723,16 +720,35 @@ export function AdminCoursesPage() {
       }
       setLessonSaving(false)
     }
+    // Queue old lesson audio for cleanup if it was replaced
+    if (originalAudioPath && originalAudioPath !== audioPath && safeResolveAudioSource(originalAudioPath)?.kind === 'host') {
+      setDraft(d => {
+        const existing = d.removedLessonAudioPaths ?? []
+        return { ...d, removedLessonAudioPaths: existing.includes(originalAudioPath) ? existing : [...existing, originalAudioPath] }
+      })
+    }
     if (isNew) {
-      setDraft(d => ({ ...d, lessons: [...d.lessons, { id, title: title.trim(), videoUrl: videoUrl.trim(), durationSeconds, coverUrl: finalCoverUrl, position: d.lessons.length }] }))
+      setDraft(d => ({ ...d, lessons: [...d.lessons, { id, title: title.trim(), videoUrl: videoUrl.trim(), audioPath: audioPath.trim(), durationSeconds, coverUrl: finalCoverUrl, position: d.lessons.length }] }))
     } else {
-      setDraft(d => ({ ...d, lessons: d.lessons.map(l => l.id === id ? { ...l, title: title.trim(), videoUrl: videoUrl.trim(), durationSeconds, coverUrl: finalCoverUrl } : l) }))
+      setDraft(d => ({ ...d, lessons: d.lessons.map(l => l.id === id ? { ...l, title: title.trim(), videoUrl: videoUrl.trim(), audioPath: audioPath.trim(), durationSeconds, coverUrl: finalCoverUrl } : l) }))
     }
     setActiveLessonForm(null)
     setLessonFormError('')
   }
   const removeLesson = (lessonId: string) => {
-    setDraft(d => ({ ...d, lessons: d.lessons.filter(l => l.id !== lessonId), removedLessonIds: [...d.removedLessonIds, lessonId] }))
+    setDraft(d => {
+      const lesson = d.lessons.find(l => l.id === lessonId)
+      const hasHostAudio = lesson?.audioPath && safeResolveAudioSource(lesson.audioPath)?.kind === 'host'
+      const existingAudioPaths = d.removedLessonAudioPaths ?? []
+      return {
+        ...d,
+        lessons: d.lessons.filter(l => l.id !== lessonId),
+        removedLessonIds: [...d.removedLessonIds, lessonId],
+        removedLessonAudioPaths: hasHostAudio && lesson?.audioPath && !existingAudioPaths.includes(lesson.audioPath)
+          ? [...existingAudioPaths, lesson.audioPath]
+          : existingAudioPaths,
+      }
+    })
     if (activeLessonForm?.id === lessonId) setActiveLessonForm(null)
   }
   const moveLesson = (index: number, direction: -1 | 1) => {
@@ -760,14 +776,14 @@ export function AdminCoursesPage() {
 
   const saveCourse = async (event: FormEvent) => {
     event.preventDefault()
-    if (!adminSupabase || !user || saving || audioUploading || audioUploadLockRef.current) return
+    if (!adminSupabase || !user || saving || false || lessonAudioUploading) return
     setSaving(true)
     setError('')
     setNotice('')
     try {
-      if (section === 'courses' && activeLessonForm && (activeLessonForm.title.trim() || activeLessonForm.videoUrl.trim())) {
+      if ((section === 'courses' || section === 'podcasts') && activeLessonForm && (activeLessonForm.title.trim() || activeLessonForm.videoUrl.trim() || activeLessonForm.audioPath.trim())) {
         setSaving(false)
-        setLessonFormError('Clique em "Adicionar aula" para confirmar esta aula antes de salvar.')
+        setLessonFormError(`Clique em "Adicionar ${section === 'podcasts' ? 'episódio' : 'aula'}" para confirmar antes de salvar.`)
         return
       }
       if (section === 'courses' && draft.status === 'published' && draft.lessons.length === 0) {
@@ -785,8 +801,11 @@ export function AdminCoursesPage() {
         if (uploadError) throw uploadError
         coverUrl = adminSupabase.storage.from('course-covers').getPublicUrl(path).data.publicUrl
       }
-      if (section === 'podcasts' && !draft.audioFile && !draft.audioPath.trim() && !draft.videoUrl.trim()) {
-        throw new Error('Adicione um ficheiro MP3 ou um link de YouTube antes de publicar o podcast.')
+      if (section === 'podcasts') {
+        const hasEpisodes = draft.lessons.length > 0
+        if (!hasEpisodes && !draft.audioFile && !draft.audioPath.trim() && !draft.videoUrl.trim()) {
+          throw new Error('Adicione episódios, um ficheiro MP3 ou um link de YouTube para o podcast.')
+        }
       }
       const finalAudioPath = draft.audioPath.trim()
       if (!coverUrl && section !== 'interviews') throw new Error(`Adicione uma capa à ${sectionMeta[section]?.item ?? 'publicação'} antes de salvar.`)
@@ -816,10 +835,10 @@ export function AdminCoursesPage() {
         instructor: draft.instructor.trim(),
         category: section === 'courses' ? 'miniseries' : draft.category,
         video_url: draft.videoUrl.trim() || null,
-        body: draft.body.trim() || null,
+        body: section === 'podcasts' ? (draft.articleCategory.trim() || null) : (draft.body.trim() || null),
         notes_enabled: draft.notesEnabled,
-        lesson_count: section === 'courses' ? (draft.lessons.length || null) : (draft.lessonCount ? parseInt(draft.lessonCount) : null),
-        duration_text: section === 'courses' ? (totalDurationText(draft.lessons) || null) : (draft.durationText.trim() || null),
+        lesson_count: (section === 'courses' || (section === 'podcasts' && draft.lessons.length > 0)) ? (draft.lessons.length || null) : (draft.lessonCount ? parseInt(draft.lessonCount) : null),
+        duration_text: (section === 'courses' || (section === 'podcasts' && draft.lessons.length > 0)) ? (totalDurationText(draft.lessons) || null) : (draft.durationText.trim() || null),
         level: draft.level,
         status: draft.status,
         created_by: user.id,
@@ -838,9 +857,9 @@ export function AdminCoursesPage() {
         savedCourseId = result.data.id
       }
       }
-      if (section === 'courses' && savedCourseId) {
+      if ((section === 'courses' || section === 'podcasts') && savedCourseId) {
         if (draft.lessons.length > 0) {
-          const lessonRows: LessonRow[] = draft.lessons.map((l, i) => ({ id: l.id, course_id: savedCourseId as string, title: l.title, video_url: l.videoUrl, duration_seconds: l.durationSeconds, position: i, cover_url: l.coverUrl || null }))
+          const lessonRows = draft.lessons.map((l, i) => ({ id: l.id, course_id: savedCourseId as string, title: l.title, video_url: l.videoUrl || null, audio_path: l.audioPath || null, duration_seconds: l.durationSeconds, position: i, cover_url: l.coverUrl || null }))
           const { error: upsertErr } = await adminSupabase.from('lessons').upsert(lessonRows, { onConflict: 'id' })
           if (upsertErr) throw upsertErr
         }
@@ -850,6 +869,7 @@ export function AdminCoursesPage() {
         }
       }
       const queuedDeletions = [...audioDeleteQueue]
+      const queuedLessonAudioDeletions = [...(draft.removedLessonAudioPaths ?? [])]
       const successMsg = draft.status === 'published'
         ? (section === 'courses' ? 'Minissérie publicada na biblioteca.' : 'Conteúdo publicado na biblioteca.')
         : draft.status === 'scheduled'
@@ -867,27 +887,30 @@ export function AdminCoursesPage() {
       await loadDashboard()
       // Remoção de áudios antigos em segundo plano, sem bloquear nem expor erros ao usuário.
       for (const audioPath of queuedDeletions) void deleteHostedAudioSilently(audioPath)
+      for (const audioPath of queuedLessonAudioDeletions) void deleteHostedAudioSilently(audioPath)
     } catch (caught) {
       console.error('Falha ao salvar conteúdo no painel administrativo:', caught)
       setError(errorMessage(caught))
-    } finally { setSaving(false); setAudioUploadProgress(0) }
+    } finally { setSaving(false) }
   }
 
   const editCourse = async (course: Course) => {
     setEditingId(course.id)
     let loadedLessons: LessonDraft[] = []
     let articleBody = ''
-    if (adminSupabase && (course.category === 'course' || course.category === 'miniseries')) {
-      const { data } = await adminSupabase.from('lessons').select('id,title,video_url,duration_seconds,position,cover_url').eq('course_id', course.id).order('position')
-      loadedLessons = ((data ?? []) as LessonRow[]).map(l => ({ id: l.id, title: l.title, videoUrl: l.video_url, durationSeconds: l.duration_seconds, position: l.position, coverUrl: l.cover_url ?? '' }))
+    if (adminSupabase && (course.category === 'course' || course.category === 'miniseries' || course.category === 'podcast')) {
+      const { data } = await adminSupabase.from('lessons').select('id,title,video_url,audio_path,duration_seconds,position,cover_url').eq('course_id', course.id).order('position')
+      loadedLessons = ((data ?? []) as LessonRow[]).map(l => ({ id: l.id, title: l.title, videoUrl: l.video_url ?? '', audioPath: l.audio_path ?? '', durationSeconds: l.duration_seconds, position: l.position, coverUrl: l.cover_url ?? '' }))
     }
     let articleCategory = 'Mentalidade'
     if (adminSupabase && course.category === 'blog') {
       const { data } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
       articleBody = data?.content ?? ''
       articleCategory = data?.category ?? 'Mentalidade'
+    } else if (course.category === 'podcast' && course.body) {
+      articleCategory = course.body
     }
-    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', position: course.position?.toString() ?? '', coverUrl: course.cover_url, file: null, audioFile: null, audioPath: course.audio_path ?? '', notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], articleCategory, interviewAuthor: course.interview_author ?? '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
+    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', position: course.position?.toString() ?? '', coverUrl: course.cover_url, file: null, audioFile: null, audioPath: course.audio_path ?? '', notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], removedLessonAudioPaths: [], articleCategory, interviewAuthor: course.interview_author ?? '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
     setPreviewUrl(cardCover(course.cover_url || areaImage[course.slug]))
     setActiveLessonForm(null)
     setLessonFormError('')
@@ -904,6 +927,12 @@ export function AdminCoursesPage() {
     const { id, title, audioPath } = deleteCourseConfirm
     const tableBySection: Partial<Record<AdminSection, string>> = { interviews: 'interviews', blog: 'articles', zoom: 'zoom_recordings' }
     const table = tableBySection[section] ?? 'courses'
+    // Collect episode audio paths before cascade delete so we can clean them up afterwards
+    let episodeAudioPaths: string[] = []
+    if (section === 'podcasts') {
+      const { data: lessonRows } = await adminSupabase.from('lessons').select('audio_path').eq('course_id', id)
+      episodeAudioPaths = (lessonRows ?? []).map(r => r.audio_path).filter((p): p is string => !!p)
+    }
     setDeleteCourseLoading(true)
     const { error: deleteError } = await adminSupabase.from(table).delete().eq('id', id)
     setDeleteCourseLoading(false)
@@ -913,8 +942,9 @@ export function AdminCoursesPage() {
     } else {
       setNotice(`${title} foi excluído.`)
       await loadDashboard()
-      // Remoção do áudio em segundo plano, sem bloquear nem expor erros ao usuário.
+      // Remoção dos áudios em segundo plano, sem bloquear nem expor erros ao usuário.
       if (audioPath) void deleteHostedAudioSilently(audioPath)
+      for (const ep of episodeAudioPaths) void deleteHostedAudioSilently(ep)
     }
   }
 
@@ -1117,7 +1147,7 @@ export function AdminCoursesPage() {
             </div>
             <div className="admin-field-row-equal">
               <label className="admin-field"><span>{meta.titleLabel}</span><input value={draft.title} onChange={e => setDraft(c => ({ ...c, title: e.target.value }))} placeholder={`Ex.: Título do ${meta.item}`} required maxLength={100}/></label>
-              {(section === 'courses' || section === 'blog')
+              {(section === 'courses' || section === 'blog' || section === 'podcasts')
                 ? <div className="admin-field"><span>{meta.authorLabel}</span><AdminSelect ariaLabel={meta.authorLabel} className="admin-author-select" value={draft.instructor} onChange={v => setDraft(c => ({ ...c, instructor: v }))} options={PROFESSOR_OPTIONS}/></div>
                 : <label className="admin-field"><span>{meta.authorLabel}</span><input value={draft.instructor} onChange={e => setDraft(c => ({ ...c, instructor: e.target.value }))} placeholder={meta.authorLabel} maxLength={100}/></label>}
               {section === 'interviews' && (
@@ -1125,6 +1155,12 @@ export function AdminCoursesPage() {
               )}
             </div>
             <label className="admin-field"><span>Descrição</span><textarea value={draft.description} onChange={e => setDraft(c => ({ ...c, description: e.target.value }))} placeholder={`Sobre este ${meta.item}…`} required rows={4} maxLength={1200}/></label>
+            {section === 'podcasts' && (
+              <div className="admin-field">
+                <span>Tema</span>
+                <AdminSelect ariaLabel="Tema do podcast" className="admin-category-select" value={draft.articleCategory} onChange={v => setDraft(c => ({ ...c, articleCategory: v }))} options={articleCategories}/>
+              </div>
+            )}
             {section === 'blog' && (
               <div className="admin-field-row-equal">
                 <div className="admin-field admin-category-field" style={{ marginTop: 0 }}>
@@ -1149,10 +1185,19 @@ export function AdminCoursesPage() {
               </div>
             )}
           </div>
-          {/* Seção 2 — Aulas da minissérie */}
-          {section === 'courses' && <div className="admin-form-card">
+          {/* Banner de conversão: podcast com áudio único, sem episódios */}
+          {section === 'podcasts' && draft.audioPath.trim() && draft.lessons.length === 0 && (
+            <div className="admin-form-card admin-legacy-audio-banner">
+              <div className="admin-form-section-head">
+                <div className="admin-form-section-left"><Music size={18}/><div><strong>Áudio único (formato antigo)</strong><span>Este podcast tem um áudio único. Pode convertê-lo em episódio para usar múltiplos episódios.</span></div></div>
+                <button type="button" className="admin-lesson-confirm-btn" onClick={convertToEpisode}><Plus size={14}/> Converter em episódio</button>
+              </div>
+            </div>
+          )}
+          {/* Seção 2 — Aulas da minissérie / Episódios do podcast */}
+          {(section === 'courses' || section === 'podcasts') && <div className="admin-form-card">
             <div className="admin-form-section-head">
-              <div className="admin-form-section-left"><span className="admin-form-step">2</span><div><strong>Aulas</strong><span>Adicione as aulas do {meta.item} com os respectivos links do YouTube.</span></div></div>
+              <div className="admin-form-section-left"><span className="admin-form-step">2</span><div><strong>{section === 'podcasts' ? 'Episódios' : 'Aulas'}</strong><span>{section === 'podcasts' ? 'Adicione os episódios do programa com MP3 ou link de YouTube.' : `Adicione as aulas do ${meta.item} com os respectivos links do YouTube.`}</span></div></div>
               <div className="admin-form-section-actions">
                 {aiSortDone && <span className="admin-autosort-notice"><Check size={12}/> Ordenado — clique em Publicar para confirmar</span>}
                 {draft.lessons.length > 1 && <button type="button" className="admin-autosort-btn" disabled={aiSortLoading} onClick={() => { setAiSortDone(false)
@@ -1179,23 +1224,50 @@ export function AdminCoursesPage() {
                   ? <div key={lesson.id}>
                       <div className="admin-lesson-form">
                         <div className="admin-lesson-form-row">
-                          <label className="admin-field"><span>Título da aula</span><input value={activeLessonForm.title} onChange={e => setActiveLessonForm(f => f ? { ...f, title: e.target.value } : f)} placeholder="Ex.: Introdução ao módulo" maxLength={200}/></label>
-                          <label className="admin-field"><span>Link do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>
+                          <label className="admin-field"><span>Título {section === 'podcasts' ? 'do episódio' : 'da aula'}</span><input value={activeLessonForm.title} onChange={e => setActiveLessonForm(f => f ? { ...f, title: e.target.value } : f)} placeholder={section === 'podcasts' ? 'Ex.: Episódio 1 — Introdução' : 'Ex.: Introdução ao módulo'} maxLength={200}/></label>
+                          {section !== 'podcasts' && <label className="admin-field"><span>Link do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>}
                           <label className="admin-field"><span>Duração (ex.: 12:34)</span><div className="admin-input-icon-wrap"><Clock size={14}/><input value={activeLessonForm.durationText} onChange={e => setActiveLessonForm(f => f ? { ...f, durationText: e.target.value } : f)} placeholder="MM:SS ou H:MM:SS" className="admin-input-has-icon"/></div></label>
                         </div>
+                        {section === 'podcasts' && (
+                          <div className="admin-lesson-form-row">
+                            <div className="admin-field">
+                              <span>Ficheiro MP3 <span className="admin-ai-optional">(ou link de YouTube abaixo)</span></span>
+                              {activeLessonForm.audioPath && safeResolveAudioSource(activeLessonForm.audioPath)?.kind === 'host' && (
+                                <div className="admin-audio-current">
+                                  <Music size={14}/><span>{activeLessonForm.audioFileName || 'Áudio carregado'}</span>
+                                  <button type="button" className="admin-audio-remove-btn" disabled={lessonAudioUploading} onClick={() => setActiveLessonForm(f => f ? { ...f, audioPath: '', audioFileName: '' } : f)}><X size={12}/> Remover</button>
+                                </div>
+                              )}
+                              <label className={`admin-audio-upload-area${activeLessonForm.audioFileName ? ' admin-audio-upload-area--selected' : ''}`}>
+                                <input type="file" accept="audio/mpeg,.mp3" disabled={lessonAudioUploading || saving} onChange={e => { handleLessonAudioFile(e.target.files?.[0] ?? null); e.target.value = '' }}/>
+                                {activeLessonForm.audioFileName
+                                  ? <div className="admin-audio-file-info"><Music size={18}/><div><strong>{activeLessonForm.audioFileName}</strong></div></div>
+                                  : <span className="admin-audio-placeholder"><Upload size={20}/><strong>Escolher MP3</strong><small>Máx. 150 MB · clique ou arraste</small></span>}
+                              </label>
+                              {lessonAudioUploading && lessonAudioUploadProgress > 0 && (
+                                <div className="admin-audio-progress-wrap">
+                                  <div className="admin-audio-progress-bar"><div className="admin-audio-progress-fill" style={{ width: `${lessonAudioUploadProgress}%` }}/></div>
+                                  <span>{lessonAudioUploadProgress}%</span>
+                                  <button type="button" className="admin-audio-cancel-btn" onClick={cancelLessonAudioUpload}>Cancelar</button>
+                                </div>
+                              )}
+                            </div>
+                            <label className="admin-field"><span>Link de YouTube <span className="admin-ai-optional">(alternativa ao MP3)</span></span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>
+                          </div>
+                        )}
                         <div className="admin-lesson-form-row admin-lesson-form-row--cover">
                           <label className="admin-lesson-cover-upload">
                             <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const f = e.target.files?.[0]; if (f) pickLessonCover(f); e.target.value = '' }}/>
                             {activeLessonForm.coverPreview
                               ? <img src={activeLessonForm.coverPreview} alt="Capa" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
-                              : <span className="admin-lesson-cover-placeholder"><ImagePlus size={18}/><small>Capa da aula</small></span>}
+                              : <span className="admin-lesson-cover-placeholder"><ImagePlus size={18}/><small>Capa {section === 'podcasts' ? 'do episódio' : 'da aula'}</small></span>}
                           </label>
                           {activeLessonForm.coverFile && <button type="button" className="admin-lesson-cover-remove" title="Remover capa" onClick={removeLessonCover}><X size={11}/></button>}
                         </div>
                         {lessonFormError && <p className="admin-lesson-form-error">{lessonFormError}</p>}
                         <div className="admin-lesson-form-actions">
                           <button type="button" className="admin-lesson-cancel-btn" onClick={cancelLessonForm}>Cancelar</button>
-                          <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Salvar alterações</button>
+                          <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving || lessonAudioUploading}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Salvar alterações</button>
                         </div>
                       </div>
                     </div>
@@ -1203,10 +1275,10 @@ export function AdminCoursesPage() {
                       <span className="admin-lesson-num">{String(index + 1).padStart(2, '0')}</span>
                       {lesson.coverUrl
                         ? <img className="admin-lesson-thumb" src={lesson.coverUrl} alt="" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
-                        : <span className="admin-lesson-thumb admin-lesson-thumb--empty"><ImageIcon size={16}/></span>}
+                        : <span className="admin-lesson-thumb admin-lesson-thumb--empty">{lesson.audioPath ? <Music size={16}/> : <ImageIcon size={16}/>}</span>}
                       <div className="admin-lesson-info">
                         <span className="admin-lesson-title">{lesson.title}</span>
-                        <span className="admin-lesson-url">{lesson.videoUrl}</span>
+                        <span className="admin-lesson-url">{lesson.audioPath ? '🎵 MP3 carregado' : lesson.videoUrl}</span>
                       </div>
                       {lesson.durationSeconds > 0 && <span className="admin-lesson-dur"><Clock size={11}/> {formatDurationSeconds(lesson.durationSeconds)}</span>}
                       <div className="admin-lesson-actions">
@@ -1220,29 +1292,56 @@ export function AdminCoursesPage() {
             </div>}
             {activeLessonForm?.isNew && <div className="admin-lesson-form">
               <div className="admin-lesson-form-row">
-                <label className="admin-field"><span>Título da aula</span><input value={activeLessonForm.title} onChange={e => setActiveLessonForm(f => f ? { ...f, title: e.target.value } : f)} placeholder="Ex.: Introdução ao módulo" maxLength={200}/></label>
-                <label className="admin-field"><span>Link do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>
+                <label className="admin-field"><span>Título {section === 'podcasts' ? 'do episódio' : 'da aula'}</span><input value={activeLessonForm.title} onChange={e => setActiveLessonForm(f => f ? { ...f, title: e.target.value } : f)} placeholder={section === 'podcasts' ? 'Ex.: Episódio 1 — Introdução' : 'Ex.: Introdução ao módulo'} maxLength={200}/></label>
+                {section !== 'podcasts' && <label className="admin-field"><span>Link do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>}
                 <label className="admin-field"><span>Duração (ex.: 12:34)</span><div className="admin-input-icon-wrap"><Clock size={14}/><input value={activeLessonForm.durationText} onChange={e => setActiveLessonForm(f => f ? { ...f, durationText: e.target.value } : f)} placeholder="MM:SS ou H:MM:SS" className="admin-input-has-icon"/></div></label>
               </div>
+              {section === 'podcasts' && (
+                <div className="admin-lesson-form-row">
+                  <div className="admin-field">
+                    <span>Ficheiro MP3 <span className="admin-ai-optional">(ou link de YouTube abaixo)</span></span>
+                    {activeLessonForm.audioPath && safeResolveAudioSource(activeLessonForm.audioPath)?.kind === 'host' && (
+                      <div className="admin-audio-current">
+                        <Music size={14}/><span>{activeLessonForm.audioFileName || 'Áudio carregado'}</span>
+                        <button type="button" className="admin-audio-remove-btn" disabled={lessonAudioUploading} onClick={() => setActiveLessonForm(f => f ? { ...f, audioPath: '', audioFileName: '' } : f)}><X size={12}/> Remover</button>
+                      </div>
+                    )}
+                    <label className={`admin-audio-upload-area${activeLessonForm.audioFileName ? ' admin-audio-upload-area--selected' : ''}`}>
+                      <input type="file" accept="audio/mpeg,.mp3" disabled={lessonAudioUploading || saving} onChange={e => { handleLessonAudioFile(e.target.files?.[0] ?? null); e.target.value = '' }}/>
+                      {activeLessonForm.audioFileName
+                        ? <div className="admin-audio-file-info"><Music size={18}/><div><strong>{activeLessonForm.audioFileName}</strong></div></div>
+                        : <span className="admin-audio-placeholder"><Upload size={20}/><strong>Escolher MP3</strong><small>Máx. 150 MB · clique ou arraste</small></span>}
+                    </label>
+                    {lessonAudioUploading && lessonAudioUploadProgress > 0 && (
+                      <div className="admin-audio-progress-wrap">
+                        <div className="admin-audio-progress-bar"><div className="admin-audio-progress-fill" style={{ width: `${lessonAudioUploadProgress}%` }}/></div>
+                        <span>{lessonAudioUploadProgress}%</span>
+                        <button type="button" className="admin-audio-cancel-btn" onClick={cancelLessonAudioUpload}>Cancelar</button>
+                      </div>
+                    )}
+                  </div>
+                  <label className="admin-field"><span>Link de YouTube <span className="admin-ai-optional">(alternativa ao MP3)</span></span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>
+                </div>
+              )}
               <div className="admin-lesson-form-row admin-lesson-form-row--cover">
                 <label className="admin-lesson-cover-upload">
                   <input type="file" accept="image/jpeg,image/png,image/webp" onChange={e => { const f = e.target.files?.[0]; if (f) pickLessonCover(f); e.target.value = '' }}/>
                   {activeLessonForm.coverPreview
                     ? <img src={activeLessonForm.coverPreview} alt="Capa" onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}/>
-                    : <span className="admin-lesson-cover-placeholder"><ImagePlus size={18}/><small>Capa da aula</small></span>}
+                    : <span className="admin-lesson-cover-placeholder"><ImagePlus size={18}/><small>Capa {section === 'podcasts' ? 'do episódio' : 'da aula'}</small></span>}
                 </label>
                 {activeLessonForm.coverFile && <button type="button" className="admin-lesson-cover-remove" title="Remover capa" onClick={removeLessonCover}><X size={11}/></button>}
               </div>
               {lessonFormError && <p className="admin-lesson-form-error">{lessonFormError}</p>}
               <div className="admin-lesson-form-actions">
                 <button type="button" className="admin-lesson-cancel-btn" onClick={cancelLessonForm}>Cancelar</button>
-                <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Adicionar aula</button>
+                <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving || lessonAudioUploading}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Adicionar {section === 'podcasts' ? 'episódio' : 'aula'}</button>
               </div>
             </div>}
             {!activeLessonForm && !playlistImportOpen && (
               <div className="admin-lesson-add-row">
-                <button type="button" className="admin-add-lesson-btn" onClick={addNewLesson}><Plus size={14}/> Adicionar aula</button>
-                <button type="button" className="admin-import-playlist-btn" onClick={openPlaylistImport}><ListVideo size={14}/> Importar playlist</button>
+                <button type="button" className="admin-add-lesson-btn" onClick={addNewLesson}><Plus size={14}/> Adicionar {section === 'podcasts' ? 'episódio' : 'aula'}</button>
+                {section !== 'podcasts' && <button type="button" className="admin-import-playlist-btn" onClick={openPlaylistImport}><ListVideo size={14}/> Importar playlist</button>}
               </div>
             )}
             {playlistImportOpen && (
@@ -1294,76 +1393,19 @@ export function AdminCoursesPage() {
               </div>
             )}
           </div>}
-          {/* Seção 2 — Conteúdo (para não-blog não-courses) */}
-          {section !== 'blog' && section !== 'courses' && <div className="admin-form-card">
+          {/* Seção 2 — Conteúdo (entrevistas, zoom; podcasts sempre usam episódios) */}
+          {section !== 'blog' && section !== 'courses' && section !== 'podcasts' && <div className="admin-form-card">
             <div className="admin-form-section-head">
               <div className="admin-form-section-left"><span className="admin-form-step">2</span><div><strong>Conteúdo</strong><span>Configure o conteúdo e a estrutura do {meta.item}.</span></div></div>
             </div>
-            <label className="admin-field"><span>{meta.videoLabel}{section === 'podcasts' && <span className="admin-ai-optional"> (opcional se tiver MP3)</span>}</span>
-              <div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={draft.videoUrl} onChange={e => setDraft(c => ({ ...c, videoUrl: e.target.value }))} placeholder="https://…" required={section !== 'podcasts'} className="admin-input-has-icon"/></div>
+            <label className="admin-field"><span>{meta.videoLabel}</span>
+              <div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={draft.videoUrl} onChange={e => setDraft(c => ({ ...c, videoUrl: e.target.value }))} placeholder="https://…" required className="admin-input-has-icon"/></div>
             </label>
-            {section === 'podcasts' && (
-              <div className="admin-field">
-                <span>Ficheiro de áudio MP3 <span className="admin-ai-optional">(opcional se tiver link de YouTube)</span></span>
-                {draft.audioPath && (
-                  <>
-                    <div className="admin-audio-current">
-                      <Music size={14}/><span>Áudio carregado</span>
-                      <button type="button" className="admin-audio-remove-btn" disabled={audioUploading} onClick={() => {
-                        const oldPath = draft.audioPath
-                        setDraft(current => ({ ...current, audioPath: '' }))
-                        if (safeResolveAudioSource(oldPath)?.kind === 'host') {
-                          setAudioDeleteQueue(current => current.includes(oldPath) ? current : [...current, oldPath])
-                        }
-                      }}><X size={12}/> Remover</button>
-                    </div>
-                    {draftAudioSource?.kind === 'host' && (draftAudioSource.url
-                      ? <audio className="admin-audio-preview" controls preload="metadata" src={draftAudioSource.url}>O navegador não suporta a reprodução de áudio.</audio>
-                      : <p className="admin-audio-preview-note">Pré-visualização indisponível.</p>)}
-                  </>
-                )}
-                <label className={`admin-audio-upload-area${draft.audioFile ? ' admin-audio-upload-area--selected' : ''}`}>
-                  <input type="file" accept="audio/mpeg,.mp3" disabled={audioUploading || saving} onChange={e => {
-                    handleAudioFile(e.target.files?.[0] ?? null)
-                    e.target.value = ''
-                  }}/>
-                  {draft.audioFile ? (
-                    <div className="admin-audio-file-info">
-                      <Music size={18}/>
-                      <div><strong>{draft.audioFile.name}</strong><span>{(draft.audioFile.size / 1024 / 1024).toFixed(1)} MB</span></div>
-                      <button type="button" className="admin-audio-remove-btn admin-audio-remove-btn--inline" disabled={audioUploading || saving} onClick={event => {
-                        event.preventDefault()
-                        setDraft(current => ({ ...current, audioFile: null }))
-                      }}><X size={13}/></button>
-                    </div>
-                  ) : (
-                    <span className="admin-audio-placeholder"><Upload size={20}/><strong>Escolher MP3</strong><small>Máx. 150 MB · clique ou arraste</small></span>
-                  )}
-                </label>
-                <div className="admin-audio-help">
-                  <strong>Como preparar o áudio</strong>
-                  <ol>
-                    <li>Abra o WAV no Audacity, gratuito, ou use o FFmpeg.</li>
-                    <li>Exporte em MP3, 96 kbps, mono, adequado para voz.</li>
-                    <li>Guarde o ficheiro com a extensão <code>.mp3</code>.</li>
-                    <li>Envie o MP3 aqui; o limite é 150 MB.</li>
-                  </ol>
-                  <code>ffmpeg -i entrada.wav -codec:a libmp3lame -b:a 96k -ac 1 saida.mp3</code>
-                </div>
-                {audioUploading && audioUploadProgress > 0 && (
-                  <div className="admin-audio-progress-wrap">
-                    <div className="admin-audio-progress-bar"><div className="admin-audio-progress-fill" style={{ width: `${audioUploadProgress}%` }}/></div>
-                    <span>{audioUploadProgress}%</span>
-                    <button type="button" className="admin-audio-cancel-btn" onClick={cancelAudioUpload}>Cancelar</button>
-                  </div>
-                )}
-              </div>
-            )}
             {section === 'zoom' && <div className="admin-form-grid">
               <label className="admin-field"><span>Tipo de gravação</span><AdminSelect className="admin-field-select" ariaLabel="Tipo de gravação" value={draft.zoomType} onChange={value => setDraft(c => ({ ...c, zoomType: value }))} options={[{ value: 'Aula', label: 'Aula' }, { value: 'Workshop', label: 'Workshop' }, { value: 'Mentoria', label: 'Mentoria' }]}/></label>
               <label className="admin-field"><span>Categoria</span><input value={draft.zoomCategory} onChange={e => setDraft(c => ({ ...c, zoomCategory: e.target.value }))} placeholder="Ex.: Vendas" maxLength={80}/></label>
             </div>}
-            {(section === 'podcasts' || section === 'zoom') && <label className="admin-field"><span>Duração</span><input value={draft.durationText} onChange={e => setDraft(c => ({ ...c, durationText: e.target.value }))} placeholder="Ex.: 45 min"/></label>}
+            {section === 'zoom' && <label className="admin-field"><span>Duração</span><input value={draft.durationText} onChange={e => setDraft(c => ({ ...c, durationText: e.target.value }))} placeholder="Ex.: 45 min"/></label>}
           </div>}
           {/* Seção 3 — Configurações */}
           <div className="admin-form-card">
@@ -1373,8 +1415,8 @@ export function AdminCoursesPage() {
             <div className={`admin-form-config-grid${section === 'blog' ? ' admin-form-config-grid--article' : ''}`}>
               <div className="admin-form-config-left">
                 {section === 'courses' && <label className="admin-field"><span>Nível</span><AdminSelect className="admin-field-select" ariaLabel="Nível" value={draft.level ?? ''} onChange={value => setDraft(c => ({ ...c, level: (value || null) as Course['level'] }))} options={[{ value: '', label: 'Sem nível definido' }, { value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermédio', label: 'Intermédio' }, { value: 'Avançado', label: 'Avançado' }]}/></label>}
-                {(section === 'courses' || section === 'podcasts') && <label className="admin-field"><span>Posição na biblioteca</span><div className="admin-input-icon-wrap"><Hash size={14}/><input type="number" min="1" value={draft.position} onChange={e => setDraft(c => ({ ...c, position: e.target.value }))} placeholder="Ex.: 1, 2, 3…" className="admin-input-has-icon"/></div></label>}
-                {(section === 'courses' || section === 'podcasts') && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
+                {section === 'courses' && <label className="admin-field"><span>Posição na biblioteca</span><div className="admin-input-icon-wrap"><Hash size={14}/><input type="number" min="1" value={draft.position} onChange={e => setDraft(c => ({ ...c, position: e.target.value }))} placeholder="Ex.: 1, 2, 3…" className="admin-input-has-icon"/></div></label>}
+                {section === 'courses' && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
               </div>
               <div className="admin-form-config-right">
                 <div className="admin-field"><span>Capa</span>
@@ -1393,8 +1435,8 @@ export function AdminCoursesPage() {
               <AdminSelect className={`admin-status-select admin-status-select--${draft.status}`} ariaLabel="Estado da publicação" value={draft.status} onChange={value => setDraft(c => ({ ...c, status: value as CourseDraft['status'] }))} options={[{ value: 'draft', label: 'Guardar como rascunho' }, { value: 'scheduled', label: 'Agendar publicação' }, { value: 'published', label: 'Publicar agora' }]}/>
               {draft.status === 'scheduled' && <input type="datetime-local" className="admin-scheduled-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>}
             </div>
-            <button className="button admin-save-btn-new" type="submit" disabled={saving || audioUploading}>
-              {audioUploading ? <><LoaderCircle className="admin-spinner" size={17}/>A enviar áudio…</> : saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
+            <button className="button admin-save-btn-new" type="submit" disabled={saving}>
+              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
             </button>
           </div>
         </div>
@@ -1423,6 +1465,10 @@ export function AdminCoursesPage() {
                 <li><span><Hash size={12}/> Nº de aulas</span><strong>{draft.lessons.length || '—'}</strong></li>
                 <li><span><Clock size={12}/> Duração total</span><strong>{totalDurationText(draft.lessons) || '—'}</strong></li>
                 <li><span><GraduationCap size={12}/> Nível</span><strong>{draft.level || 'Sem nível definido'}</strong></li>
+              </>}
+              {section === 'podcasts' && draft.lessons.length > 0 && <>
+                <li><span><Hash size={12}/> Episódios</span><strong>{draft.lessons.length}</strong></li>
+                <li><span><Clock size={12}/> Duração total</span><strong>{totalDurationText(draft.lessons) || '—'}</strong></li>
               </>}
               <li><span><Check size={12}/> Estado</span><strong className={`admin-pub-status ${draft.status}`}><span className="admin-status-dot"/>{draft.status === 'published' ? 'Publicado' : draft.status === 'scheduled' ? 'Agendado' : 'Rascunho'}</strong></li>
             </ul>

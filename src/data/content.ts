@@ -1,6 +1,6 @@
 import { BarChart3, Brain, Mic2, Wallet, type LucideIcon } from 'lucide-react'
 
-export type ContentArea = { slug: string; category: string; title: string; author: string; description: string; image: string; professorImage?: string; videoCount?: number; durationText?: string; lessons?: { id?: string; title: string; position: number; durationSeconds: number }[]; accent: string; Icon: LucideIcon; status: 'placeholder' | 'published'; videoUrl?: string; spotifyUrl?: string; notesEnabled?: boolean; audioPath?: string }
+export type ContentArea = { slug: string; category: string; title: string; author: string; description: string; image: string; professorImage?: string; videoCount?: number; durationText?: string; lessons?: { id?: string; title: string; position: number; durationSeconds: number; audioPath?: string }[]; accent: string; Icon: LucideIcon; status: 'placeholder' | 'published'; videoUrl?: string; spotifyUrl?: string; notesEnabled?: boolean; audioPath?: string; categoryTag?: string }
 
 // As capas são imagens locais; manter apenas URLs de vídeo confirmados em courseVideoUrls.
 export const areas: ContentArea[] = [
