@@ -41,7 +41,7 @@ export function useNotifications() {
     Promise.all([
       client.from('courses').select('id,slug,title,cover_url,category,published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(20),
       client.from('articles').select('slug,title,image_url,published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(10),
-      client.from('interviews').select('slug,title,thumb_url,published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(10),
+      client.from('interviews').select('slug,title,cover_url,published_at').eq('status', 'published').order('published_at', { ascending: false }).limit(10),
     ]).then(([{ data: courses }, { data: articles }, { data: interviews }]) => {
       if (!active) return
       const items: Notification[] = []
@@ -83,7 +83,7 @@ export function useNotifications() {
           title: i.title,
           description: 'Nova entrevista disponível',
           href: `/entrevistas/${i.slug}`,
-          image: i.thumb_url ?? undefined,
+          image: i.cover_url ?? undefined,
           publishedAt: i.published_at,
           timeAgo: timeAgo(i.published_at),
         })

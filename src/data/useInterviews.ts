@@ -11,7 +11,7 @@ export function useInterviews() {
     if (!supabase) return () => { active = false }
     supabase
       .from('interviews')
-      .select('slug,title,subtitle,guest,guest_role,author,duration,video_id,thumb_url,published_at')
+      .select('slug,title,subtitle,guest,guest_role,author,duration,video_id,cover_url,published_at')
       .eq('status', 'published')
       .order('published_at', { ascending: false })
       .then(({ data }) => {
@@ -25,7 +25,7 @@ export function useInterviews() {
           author: row.author ?? '',
           duration: row.duration,
           videoId: row.video_id ?? undefined,
-          thumb: row.thumb_url ?? undefined,
+          thumb: row.cover_url ?? undefined,
           timeAgo: timeAgo(row.published_at),
         })))
         setLoading(false)
