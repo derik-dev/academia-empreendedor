@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useMemo, type FormEvent } from 'react'
 import type { YouTubeIframeApi, YouTubePlayerInstance, YouTubeReadyEvent, YouTubePlayerEvent } from './types/youtube'
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Search, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Search, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
 import { useAuth } from './auth/useAuth'
 import { useAdminAuth } from './auth/useAdminAuth'
 import { AdminAuthProvider } from './auth/AdminAuthProvider'
@@ -120,17 +120,13 @@ function MinisSeriesPage() {
   return <div className="app-shell app-shell--home">
     <Sidebar />
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page"><div className="home-content">
-    <section className="ms-hero" style={{ backgroundImage: `url(${img('/images/hero-minisseries.png')})` }}>
+    <section className="ms-hero" style={{ backgroundImage: `url(${img('/images/capa-miniseries.jpeg')})` }}>
       <div className="ms-hero-shade" aria-hidden="true"/>
       <div className="ms-hero-content">
         <div className="ms-hero-copy">
           <span className="ms-hero-eyebrow">MINISSÉRIE EM DESTAQUE</span>
           <h2 className="ms-hero-title">MINISSÉRIES</h2>
           <p>Conteúdos práticos e profundos para você aprender,<br/>evoluir e construir o futuro que deseja.</p>
-          <div className="ms-hero-actions">
-            <Link to="/assistir/literacia-financeira" className="ms-btn-primary"><Play size={14} fill="currentColor"/> Explorar minisséries</Link>
-            <button type="button" className="ms-btn-secondary"><Info size={14}/> Mais informações</button>
-          </div>
         </div>
       </div>
       <div className="ms-hero-dots"><i className="active"/><i/><i/><i/></div>
@@ -152,7 +148,7 @@ function MinisSeriesPage() {
           const durationLabel = `${lessonCount} ${lessonCount === 1 ? 'aula' : 'aulas'}`
           const lessonDetail = shownLesson ? 'Aula ' + (shownLesson.position + 1) + ' • ' + shownLesson.title : item.status === 'published' ? 'Aula disponível • Minissérie' : 'Conteúdo em breve'
           return <article className="home-learning-card" key={item.slug}>
-            <Link to={'/minisseries/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title}>
+            <Link to={'/assistir/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title}>
               <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
               <span className="home-video-count">{durationLabel}</span>
             </Link>
@@ -165,7 +161,7 @@ function MinisSeriesPage() {
               <p className="home-card-detail">{lessonDetail}</p>
               <div className="home-progress-row"><div className="home-progress-track"><span style={{width: percent + '%'}}/></div><span>{percent}% concluído</span></div>
               {itemProgress || item.status === 'published'
-                ? <Link className="home-continue-button" to={'/minisseries/' + item.slug}><Play size={11} fill="currentColor"/>{itemProgress ? 'Continuar aula' : 'Explorar minissérie'}</Link>
+                ? <Link className="home-continue-button" to={'/assistir/' + item.slug}><Play size={11} fill="currentColor"/>{itemProgress ? 'Continuar aula' : 'Explorar minissérie'}</Link>
                 : <span className="home-continue-button home-continue-button--disabled">Em breve</span>}
             </div>
           </article>
@@ -349,52 +345,9 @@ function NativePodcastPlayer({ signedUrl, title, author, image, playing, onPlayi
 function PodcastsPage() {
   const { courses: podcastLibrary, loading: podcastsLoading } = useLibraryCourses()
   const navigate = useNavigate()
-  type ActivePodcastPlayer =
-    | { kind: 'youtube'; slug: string; url: string; title: string; author: string; image?: string }
-    | { kind: 'native'; slug: string; signedUrl: string; title: string; author: string; image?: string }
-  const [activePlayer, setActivePlayer] = useState<ActivePodcastPlayer | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [playerLoading, setPlayerLoading] = useState<string | null>(null)
   const [activeFilter, setActiveFilter] = useState('Todos')
   const allPodcasts = podcastLibrary.filter(item => item.category === 'Podcasts')
   const items = activeFilter === 'Todos' ? allPodcasts : allPodcasts.filter(item => item.categoryTag === activeFilter)
-
-  useEffect(() => { loadYT().catch(() => {}) }, [])
-
-  const togglePodcast = async (podcast: ContentArea, episodeAudioPath?: string) => {
-    if (activePlayer?.slug === podcast.slug && !episodeAudioPath) { setIsPlaying(current => !current); return }
-    const firstEpisode = podcast.lessons?.find(l => l.audioPath)
-    const rawPath = episodeAudioPath ?? podcast.audioPath ?? firstEpisode?.audioPath
-    let source: ReturnType<typeof resolveAudioSource> = null
-    try { source = resolveAudioSource(rawPath) } catch { /* caminho inválido; cai no fallback */ }
-    let playerTitle = podcast.title
-    if (rawPath && rawPath !== podcast.audioPath && podcast.lessons) {
-      const ep = podcast.lessons.find(l => l.audioPath === rawPath)
-      if (ep) playerTitle = `Ep. ${ep.position + 1} — ${ep.title}`
-    }
-    if (source?.kind === 'host') {
-      if (source.url) {
-        setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: source.url, title: playerTitle, author: podcast.author.replace('Com ', ''), image: podcast.image })
-        setIsPlaying(true)
-        return
-      }
-    } else if (source?.kind === 'supabase' && supabase) {
-      setPlayerLoading(podcast.slug)
-      try {
-        const { data } = await supabase.storage.from('podcast-audio').createSignedUrl(source.path, 3600)
-        if (data?.signedUrl) {
-          setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: data.signedUrl, title: playerTitle, author: podcast.author.replace('Com ', ''), image: podcast.image })
-          setIsPlaying(true)
-          return
-        }
-      } catch { /* fallback to YouTube */ }
-      finally { setPlayerLoading(null) }
-    }
-    const url = podcast.spotifyUrl || podcast.videoUrl || courseVideoUrls[podcast.slug]
-    if (!url) return
-    setActivePlayer({ kind: 'youtube', slug: podcast.slug, url, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
-    setIsPlaying(true)
-  }
 
   return <div className="app-shell app-shell--home">
     <Sidebar />
@@ -406,10 +359,6 @@ function PodcastsPage() {
           <span className="ms-hero-eyebrow">PODCAST EM DESTAQUE</span>
           <h2 className="ms-hero-title">PODCASTS</h2>
           <p>Conversas que abrem caminhos sobre mentalidade,<br/>decisões e crescimento empresarial.</p>
-          <div className="ms-hero-actions">
-            <Link to="/assistir/mente-blindada" className="ms-btn-primary"><Play size={14} fill="currentColor"/> Explorar podcasts</Link>
-            <button type="button" className="ms-btn-secondary"><Info size={14}/> Mais informações</button>
-          </div>
         </div>
       </div>
       <div className="ms-hero-dots"><i className="active"/><i/><i/></div>
@@ -428,10 +377,10 @@ function PodcastsPage() {
       <div className="podcast-list">
         {items.map(item => (
           <article className="podcast-item" key={item.slug} onClick={() => navigate('/podcasts/' + item.slug)} style={{cursor:'pointer'}}>
-            <button type="button" className={`podcast-thumb${podcastsLoading ? ' podcast-thumb--loading' : ''}`} aria-label={activePlayer?.slug === item.slug && isPlaying ? `Pausar ${item.title}` : `Reproduzir ${item.title}`} onClick={e => { e.stopPropagation(); void togglePodcast(item) }}>
+            <Link to={'/podcasts/' + item.slug} className={`podcast-thumb${podcastsLoading ? ' podcast-thumb--loading' : ''}`} aria-label={`Abrir podcast ${item.title}`} onClick={e => e.stopPropagation()}>
               <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
-              <span className="podcast-thumb-play">{playerLoading === item.slug ? <LoaderCircle size={20} className="podcast-play-spinner"/> : activePlayer?.slug === item.slug && isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}</span>
-            </button>
+              <span className="podcast-thumb-play"><Play size={20} fill="currentColor"/></span>
+            </Link>
             <div className="podcast-info">
               <div className="podcast-title-row">
                 <span className="podcast-dot"/>
@@ -442,15 +391,13 @@ function PodcastsPage() {
               <div className="podcast-meta">{(() => { const hasContent = !!(item.audioPath || item.videoUrl || item.spotifyUrl || courseVideoUrls[item.slug] || (item.videoCount ?? 0) > 0); const metaLabel = item.durationText || ((item.videoCount ?? 0) > 0 ? `${item.videoCount} ep` : null); return hasContent ? (metaLabel ? <span>{metaLabel}</span> : null) : <span>Em breve</span> })()}</div>
             </div>
             <div className="podcast-actions" onClick={e => e.stopPropagation()}>
-              <button type="button" className="podcast-play" aria-label={activePlayer?.slug === item.slug && isPlaying ? `Pausar ${item.title}` : `Reproduzir ${item.title}`} onClick={() => void togglePodcast(item)}>{playerLoading === item.slug ? <LoaderCircle size={20} className="podcast-play-spinner"/> : activePlayer?.slug === item.slug && isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}</button>
+              <Link to={'/podcasts/' + item.slug} className="podcast-play" aria-label={`Abrir podcast ${item.title}`}><Play size={20} fill="currentColor"/></Link>
             </div>
           </article>
         ))}
       </div>
     </section>
 
-    {activePlayer?.kind === 'native' && <NativePodcastPlayer key={activePlayer.signedUrl} signedUrl={activePlayer.signedUrl} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
-    {activePlayer?.kind === 'youtube' && <PodcastAudioPlayer videoId={getYouTubeId(activePlayer.url)!} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
   </div></main></div>
   </div>
 }
@@ -466,7 +413,6 @@ function PodcastDetailPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [playerLoading, setPlayerLoading] = useState<string | null>(null)
   const [activePath, setActivePath] = useState<string | null>(null)
-  const [queueExpanded, setQueueExpanded] = useState(false)
   const [authorModalOpen, setAuthorModalOpen] = useState(false)
   const [authorModalClosing, setAuthorModalClosing] = useState(false)
   const authorModalCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -500,11 +446,7 @@ function PodcastDetailPage() {
   }, [authorModalOpen, closeAuthorModal])
 
   const episodes = podcast?.lessons?.filter(l => l.audioPath).sort((a, b) => a.position - b.position) ?? []
-  const currentEpisodeIndex = episodes.findIndex(episode => episode.audioPath === activePath)
-  const upcomingEpisode = currentEpisodeIndex < 0 ? episodes[0] : episodes[currentEpisodeIndex + 1]
-  const queuedPodcasts = allCourses.filter(item => item.category === 'Podcasts' && item.slug !== podcast?.slug)
-  const upcomingPodcast = !upcomingEpisode ? queuedPodcasts[0] : undefined
-  const podcastsAfterNext = upcomingPodcast ? queuedPodcasts.slice(1) : queuedPodcasts
+  const popularPodcasts = allCourses.filter(item => item.category === 'Podcasts' && item.slug !== podcast?.slug).slice(0, 5)
   const authorName = podcast?.author.replace('Com ', '') ?? ''
   const authorPhoto = podcast ? (podcast.professorImage || getProfessorPhoto(authorName)) : undefined
   const normalizedAuthorName = authorName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')
@@ -627,37 +569,16 @@ function PodcastDetailPage() {
                 </div>
               </div>
             </div>}
-            <div className="pcast-panel-section">
-              <div className="pcast-panel-description-card">
-                <span className="pcast-panel-section-label">Sobre o podcast</span>
-                <p className="pcast-panel-desc">{podcast.description}</p>
-              </div>
-            </div>
-            {(upcomingEpisode || upcomingPodcast) && <div className="pcast-panel-section pcast-panel-up-next">
+            <div className="pcast-panel-section pcast-panel-up-next">
               <div className="pcast-panel-queue-heading">
-                <span className="pcast-panel-section-label">A seguir</span>
-                {podcastsAfterNext.length > 0 && <button type="button" onClick={() => setQueueExpanded(expanded => !expanded)} aria-expanded={queueExpanded} aria-controls="pcast-panel-queue-rest">
-                  {queueExpanded ? 'Fechar fila' : 'Abrir fila'}
-                </button>}
+                <span className="pcast-panel-section-label">Populares</span>
               </div>
-              {upcomingEpisode && podcast
-                ? <button type="button" className="pcast-panel-next-item" onClick={() => void play(podcast, upcomingEpisode.audioPath)}>
-                    <img src={cardCover(podcast.image)} alt=""/>
-                    <span><strong>{upcomingEpisode.title}</strong><small>{authorName}</small></span>
-                  </button>
-                : upcomingPodcast && <Link className="pcast-panel-next-item" to={'/podcasts/' + upcomingPodcast.slug}>
-                    <img src={cardCover(upcomingPodcast.image)} alt=""/>
-                    <span><strong>{upcomingPodcast.title}</strong><small>{upcomingPodcast.author.replace('Com ', '')}</small></span>
-                  </Link>}
-              {podcastsAfterNext.length > 0 && <div id="pcast-panel-queue-rest" className={`pcast-panel-queue-rest${queueExpanded ? ' is-open' : ''}`}>
-                <div className="pcast-panel-queue-rest-inner">
-                  {podcastsAfterNext.map(item => <Link className="pcast-panel-next-item" to={'/podcasts/' + item.slug} key={item.slug}>
-                    <img src={cardCover(item.image)} alt=""/>
-                    <span><strong>{item.title}</strong><small>{item.author.replace('Com ', '')}</small></span>
-                  </Link>)}
-                </div>
-              </div>}
-            </div>}
+              {popularPodcasts.map(item => <Link className="pcast-panel-next-item" key={item.slug} to={'/podcasts/' + item.slug}>
+                <img src={cardCover(item.image)} alt=""/>
+                <span><strong>{item.title}</strong><small>{item.author.replace('Com ', '')}</small></span>
+              </Link>)}
+              {!loading && popularPodcasts.length === 0 && <p className="pcast-panel-desc">Nenhum outro podcast disponível.</p>}
+            </div>
           </div>
         </aside>}
 
@@ -734,83 +655,7 @@ const formatWatchDuration = (secs: number): string => {
 
 function MiniseriesDetailPage() {
   const { slug } = useParams<{ slug: string }>()
-  const { courses: allCourses, loading } = useLibraryCourses()
-  const navigate = useNavigate()
-  const series = allCourses.find(c => c.slug === slug && c.category === 'Minisséries')
-  type MsLesson = { id: string; title: string; position: number; durationSeconds: number }
-  const [lessons, setLessons] = useState<MsLesson[]>([])
-
-  useEffect(() => {
-    const client = supabase
-    if (!client || !series?.slug) return
-    let active = true
-    client.from('courses').select('id').eq('slug', series.slug).maybeSingle().then(({ data: courseRow }) => {
-      if (!active || !courseRow) return
-      client.from('lessons').select('id,title,position,duration_seconds').eq('course_id', courseRow.id).order('position').then(({ data: rows }) => {
-        if (!active || !rows) return
-        setLessons(rows.map((l: { id: string; title: string; position: number; duration_seconds: number }) => ({ id: l.id, title: l.title, position: l.position, durationSeconds: l.duration_seconds })))
-      })
-    })
-    return () => { active = false }
-  }, [series?.slug])
-
-  if (!series && loading) return (
-    <div className="app-shell app-shell--home"><Sidebar/>
-      <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '120px 0' }}>
-          <LoaderCircle size={28} style={{ color: '#5a7a9a' }} className="watch-loading-icon"/>
-        </div>
-      </main></div>
-    </div>
-  )
-  if (!series) return <NotFound />
-
-  const coverUrl = cardCover(series.image)
-  const lessonCount = lessons.length || series.videoCount || 0
-
-  return (
-    <div className="app-shell app-shell--home">
-      <Sidebar/>
-      <div className="site-shell">
-        <main className="ms-detail-page">
-          {/* HERO */}
-          <div className="ms-detail-hero" style={{ backgroundImage: `url(${coverUrl})` }}>
-            <div className="ms-detail-hero-shade"/>
-            <Link to="/minisseries" className="ms-detail-back"><ArrowLeft size={14}/> Minisséries</Link>
-            <div className="ms-detail-actions-bar">
-              <button type="button" className="ms-detail-play-btn" onClick={() => void navigate(`/assistir/${series.slug}`)}>
-                <Play size={18} fill="currentColor"/> Assistir agora
-              </button>
-              {lessonCount > 0 && <span className="ms-detail-count">{lessonCount} aula{lessonCount !== 1 ? 's' : ''}</span>}
-            </div>
-          </div>
-
-          {/* EPISODES */}
-          <div className="ms-detail-lessons">
-            <h2 className="ms-detail-lessons-title">Aulas</h2>
-            <div className="ms-detail-card-grid">
-              {lessons.map((lesson, i) => (
-                <div className="ms-detail-card" key={lesson.id} onClick={() => void navigate(`/assistir/${series.slug}`)}>
-                  <div className="ms-detail-card-thumb">
-                    <img src={coverUrl} alt=""/>
-                    {lesson.durationSeconds > 0 && <span className="ms-detail-card-dur">{formatPodcastTime(lesson.durationSeconds)}</span>}
-                    <span className="ms-detail-card-overlay"><Play size={20} fill="currentColor"/></span>
-                  </div>
-                  <div className="ms-detail-card-body">
-                    <div className="ms-detail-card-num">{String(i + 1).padStart(2, '0')}</div>
-                    <div className="ms-detail-card-meta">
-                      <strong className="ms-detail-card-title">{lesson.title}</strong>
-                      <span className="ms-detail-card-author">{series.author.replace('Com ', '')}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </main>
-      </div>
-    </div>
-  )
+  return <Navigate to={'/assistir/' + slug} replace />
 }
 
 function WatchPage() {
@@ -969,17 +814,13 @@ function InterviewsPage() {
   return <div className="app-shell app-shell--home">
     <Sidebar />
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page interviews-page"><div className="home-content">
-    <section className="ms-hero iv-hero" style={{ backgroundImage: `url(${img('/images/interviews-page-banner.png')})`, backgroundPosition: '100% 35%' }}>
+    <section className="ms-hero iv-hero" style={{ backgroundImage: `url(${img('/images/capa-entrevistas.jpeg')})`, backgroundPosition: '100% 35%' }}>
       <div className="ms-hero-shade" aria-hidden="true"/>
       <div className="ms-hero-content">
         <div className="ms-hero-copy">
           <span className="ms-hero-eyebrow">ENTREVISTA EM DESTAQUE</span>
           <h2 className="ms-hero-title">ENTREVISTAS</h2>
           <p>Conversas com pessoas e percursos que acrescentam<br/>novas perspetivas ao caminho empreendedor.</p>
-          <div className="ms-hero-actions">
-            <button type="button" className="ms-btn-primary"><Play size={14} fill="currentColor"/> Explorar entrevistas</button>
-            <button type="button" className="ms-btn-secondary"><Info size={14}/> Mais informações</button>
-          </div>
         </div>
       </div>
       <div className="ms-hero-dots"><i className="active"/><i/><i/></div>
@@ -1198,16 +1039,10 @@ function BlogPage() {
       return normalizeSearch(a.title).includes(q) || normalizeSearch(a.excerpt).includes(q)
     })
 
-  const [featured, ...rest] = filtered
-  const sideArticles = rest.slice(0, 4)
-  const moreArticles = filtered.slice(5)
-  const moreSmall = moreArticles.slice(0, Math.min(moreArticles.length - 1, 4))
-  const moreFeatured = moreArticles.length > 0 ? moreArticles[moreArticles.length - 1] : undefined
-
   return <div className="app-shell app-shell--home">
     <Sidebar />
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page"><div className="home-content">
-    <section className="ms-hero blog-hero" style={{ backgroundImage: `url(${img('/images/bg-blog.png')})` }}>
+    <section className="ms-hero blog-hero" style={{ backgroundImage: `url(${img('/images/hero-empreendedor.webp')})` }}>
       <div className="ms-hero-shade" aria-hidden="true"/>
       <div className="ms-hero-content">
         <div className="ms-hero-copy">
@@ -1227,91 +1062,22 @@ function BlogPage() {
     </div>
 
     {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigos…</div>}
-    {!loading && !featured && <div style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a',fontSize:15}}>Nenhum artigo encontrado.</div>}
-    {!loading && featured && <div className="blog-grid">
-      <Link to={`/blog/${featured.slug}`} className="blog-card blog-card--featured">
-        <div className="blog-card-img" style={{ backgroundImage: `url(${featured.image})` }}>
-          <span className="blog-cat-tag">{featured.category.toUpperCase()}</span>
+    {!loading && filtered.length === 0 && <div style={{padding:'60px 0',textAlign:'center'}}>Nenhum artigo encontrado.</div>}
+    {!loading && <div className="blog-uniform-grid">
+      {filtered.map(article => <Link to={`/blog/${article.slug}`} className="blog-card" key={article.slug}>
+        <div className="blog-card-img" style={{backgroundImage: `url(${article.image})`}}>
+          <span className="blog-cat-tag">{article.category.toUpperCase()}</span>
         </div>
         <div className="blog-card-body">
-          <h2 className="blog-card-title blog-card-title--lg">{featured.title}</h2>
-          {featured.excerpt && <p className="blog-card-desc">{featured.excerpt}</p>}
+          <h2 className="blog-card-title">{article.title}</h2>
           <div className="blog-article-meta">
-            <span><Calendar size={13}/> {featured.date}</span>
+            <span><Calendar size={12}/> {article.date}</span>
             <span className="blog-meta-sep"/>
-            <span><Clock size={13}/> {featured.readTime}</span>
+            <span><Clock size={12}/> {article.readTime}</span>
           </div>
         </div>
-      </Link>
-
-      <div className="blog-side-grid">
-        {sideArticles.map(a => <Link to={`/blog/${a.slug}`} className="blog-card" key={a.slug}>
-          <div className="blog-card-img blog-card-img--sm" style={{ backgroundImage: `url(${a.image})` }}>
-            <span className="blog-cat-tag blog-cat-tag--sm">{a.category.toUpperCase()}</span>
-          </div>
-          <div className="blog-card-body blog-card-body--sm">
-            <h3 className="blog-card-title">{a.title}</h3>
-            <div className="blog-article-meta">
-              <span><Calendar size={12}/> {a.date}</span>
-              <span className="blog-meta-sep"/>
-              <span><Clock size={12}/> {a.readTime}</span>
-            </div>
-          </div>
-        </Link>)}
-      </div>
+      </Link>)}
     </div>}
-
-    {!loading && moreArticles.length > 0 && <section className="blog-more">
-      <div className="blog-more-heading"><h2>Mais artigos</h2><Link to="/blog" className="blog-ver-todos">Ver todos <ArrowRight size={14}/></Link></div>
-      {moreArticles.length >= 4
-        ? <div className="blog-more-row">
-            <div className="blog-more-small-grid">
-              {moreSmall.map(a => <Link to={`/blog/${a.slug}`} className="blog-card" key={a.slug}>
-                <div className="blog-card-img blog-card-img--sm" style={{ backgroundImage: `url(${a.image})` }}>
-                  <span className="blog-cat-tag blog-cat-tag--sm">{a.category.toUpperCase()}</span>
-                </div>
-                <div className="blog-card-body blog-card-body--sm">
-                  <h3 className="blog-card-title">{a.title}</h3>
-                  <div className="blog-article-meta">
-                    <span><Calendar size={12}/> {a.date}</span>
-                    <span className="blog-meta-sep"/>
-                    <span><Clock size={12}/> {a.readTime}</span>
-                  </div>
-                </div>
-              </Link>)}
-            </div>
-            {moreFeatured && <Link to={`/blog/${moreFeatured.slug}`} className="blog-card blog-card--featured">
-              <div className="blog-card-img" style={{ backgroundImage: `url(${moreFeatured.image})`, height: '520px' }}>
-                <span className="blog-cat-tag">{moreFeatured.category.toUpperCase()}</span>
-              </div>
-              <div className="blog-card-body">
-                <h2 className="blog-card-title blog-card-title--lg">{moreFeatured.title}</h2>
-                {moreFeatured.excerpt && <p className="blog-card-desc">{moreFeatured.excerpt}</p>}
-                <div className="blog-article-meta">
-                  <span><Calendar size={13}/> {moreFeatured.date}</span>
-                  <span className="blog-meta-sep"/>
-                  <span><Clock size={13}/> {moreFeatured.readTime}</span>
-                </div>
-              </div>
-            </Link>}
-          </div>
-        : <div className={`blog-more-compact${moreArticles.length === 1 ? ' blog-more-compact--single' : ''}`}>
-            {moreArticles.map(a => <Link to={`/blog/${a.slug}`} className="blog-card" key={a.slug}>
-              <div className="blog-card-img blog-card-img--sm" style={{ backgroundImage: `url(${a.image})` }}>
-                <span className="blog-cat-tag blog-cat-tag--sm">{a.category.toUpperCase()}</span>
-              </div>
-              <div className="blog-card-body blog-card-body--sm">
-                <h3 className="blog-card-title">{a.title}</h3>
-                <div className="blog-article-meta">
-                  <span><Calendar size={12}/> {a.date}</span>
-                  <span className="blog-meta-sep"/>
-                  <span><Clock size={12}/> {a.readTime}</span>
-                </div>
-              </div>
-            </Link>)}
-          </div>
-      }
-    </section>}
   </div></main></div>
   </div>
 }
@@ -1410,7 +1176,7 @@ function BlogArticlePage() {
   </div>
 }
 
-function NoticesPage() { return <Shell><PageContent><PageHero eyebrow="COMUNIDADE EXCLUSIVA" title="Canal de Avisos" description="Acompanhe novidades sobre agenda, novas aulas e eventos online e presenciais." image={img('/images/avisos-comunidade-central.png')} action={{ label: 'Ver avisos', to: '#avisos' }}/><div id="avisos" className="notice-panel notice-page-panel"><div className="notice-copy"><p className="eyebrow"><span className="whatsapp-dot"/> CANAL DE AVISOS</p><h2>Faça parte da conversa.</h2><p>"Temos um grupo no WhatsApp privado e exclusivo onde colocamos informações sobre agenda, novas aulas e até sobre eventos online e presenciais."</p><div className="notice-coming"><span className="notice-lock"><LockKeyhole size={14}/></span> O convite estará disponível em breve.</div></div><div className="notice-page-art"><img src={img('/images/avisos-comunidade-central.png')} alt="Telemóvel com notificações da comunidade da Academia"/></div></div></PageContent></Shell> }
+function NoticesPage() { return <Shell><PageContent><PageHero className="notices-hero" eyebrow="COMUNIDADE EXCLUSIVA" title="Canal de Avisos" description="Acompanhe novidades sobre agenda, novas aulas e eventos online e presenciais." image={img('/images/avisos-comunidade-central.png')} action={{ label: 'Ver avisos', to: '#avisos' }}/><div id="avisos" className="notice-panel notice-page-panel"><div className="notice-copy"><p className="eyebrow"><span className="whatsapp-dot"/> CANAL DE AVISOS</p><h2>Faça parte da conversa.</h2><p>"Temos um grupo no WhatsApp privado e exclusivo onde colocamos informações sobre agenda, novas aulas e até sobre eventos online e presenciais."</p><div className="notice-coming"><span className="notice-lock"><LockKeyhole size={14}/></span> O convite estará disponível em breve.</div></div><div className="notice-page-art"><img src={img('/images/avisos-comunidade-central.png')} alt="Telemóvel com notificações da comunidade da Academia"/></div></div></PageContent></Shell> }
 
 function InterviewWatchPage() {
   const { slug } = useParams()

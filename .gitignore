@@ -7,3 +7,7 @@ server/hostinger/api-academia/config.php
 supabase/.temp/
 supabase/functions/.env
 .claude/settings.local.json
+
+*.log
+plataforma-publicacao/
+plataforma-publicacao.zip

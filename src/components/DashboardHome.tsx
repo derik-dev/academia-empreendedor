@@ -288,11 +288,12 @@ export function DashboardHome() {
           </div>
         </section>
 
-        <section className="home-feature" style={{backgroundImage: `url(${img('/images/hero-bg.png')})`}}>
+        <section className="home-feature">
+          <div className="home-feature-image" style={{backgroundImage: `url(${img('/images/home-ideas-04.jpg')})`}} aria-hidden="true" />
           <div className="home-feature-shade" aria-hidden="true" />
           <div className="home-feature-copy">
-            <h2>Ideias que movem o seu negócio.</h2>
-            <Link to="#explore-academia">Explorar conteúdos <ArrowRight size={18}/></Link>
+            <h2><strong>ACADÊMIA DO EMPREENDEDOR</strong></h2>
+            <p>Juntos somos mais fortes</p>
           </div>
           <div className="home-feature-dots" aria-hidden="true"><i className="active"/><i/><i/></div>
         </section>
