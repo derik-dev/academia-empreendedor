@@ -1,6 +1,7 @@
 const professorPhotos: Record<string, string> = {
   'enio mota': '/images/professores/enio.png',
-  'eric pereira': '/images/professores/eric-prerira.png',
+  'eric pereira': '/images/professores/eric-pereira.png',
+  'eric': '/images/professores/eric-pereira.png',
 }
 
 export function getProfessorPhoto(name: string): string | undefined {

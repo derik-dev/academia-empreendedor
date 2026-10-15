@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, useMemo, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo, type FormEvent } from 'react'
 import type { YouTubeIframeApi, YouTubePlayerInstance, YouTubeReadyEvent, YouTubePlayerEvent } from './types/youtube'
-import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Search, ShieldCheck, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeft, ArrowRight, Bookmark, Calendar, CheckCircle2, ChevronDown, ChevronRight, Clock, FileText, Info, ScanText, LayoutGrid, LoaderCircle, LockKeyhole, Mail, MoreVertical, Pause, Play, Search, SkipBack, SkipForward, SlidersHorizontal, Sun, Moon, Video, Volume2, X } from 'lucide-react'
 import { useAuth } from './auth/useAuth'
 import { useAdminAuth } from './auth/useAdminAuth'
 import { AdminAuthProvider } from './auth/AdminAuthProvider'
@@ -71,11 +71,8 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function WatchShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="app-shell app-shell--watch">
-      <Sidebar />
-      <div className="site-shell">
-        <div className="site-main">{children}</div>
-      </div>
+    <div className="watch-shell">
+      {children}
     </div>
   )
 }
@@ -151,10 +148,11 @@ function MinisSeriesPage() {
           const authorName = item.author.replace('Com ', '')
           const professorPhoto = item.professorImage || getProfessorPhoto(authorName)
           const shownLesson = item.lessons?.[0]
-          const durationLabel = item.durationText || (shownLesson?.durationSeconds ? formatPodcastTime(shownLesson.durationSeconds) : (item.videoCount ?? 0) > 0 ? item.videoCount + ' aulas' : 'Em breve')
+          const lessonCount = item.lessons?.length || item.videoCount || 0
+          const durationLabel = `${lessonCount} ${lessonCount === 1 ? 'aula' : 'aulas'}`
           const lessonDetail = shownLesson ? 'Aula ' + (shownLesson.position + 1) + ' • ' + shownLesson.title : item.status === 'published' ? 'Aula disponível • Minissérie' : 'Conteúdo em breve'
           return <article className="home-learning-card" key={item.slug}>
-            <Link to={'/assistir/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title}>
+            <Link to={'/minisseries/' + item.slug} className={`home-learning-image${coursesLoading ? ' home-learning-image--loading' : ''}`} aria-label={'Abrir ' + item.title}>
               <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
               <span className="home-video-count">{durationLabel}</span>
             </Link>
@@ -167,7 +165,7 @@ function MinisSeriesPage() {
               <p className="home-card-detail">{lessonDetail}</p>
               <div className="home-progress-row"><div className="home-progress-track"><span style={{width: percent + '%'}}/></div><span>{percent}% concluído</span></div>
               {itemProgress || item.status === 'published'
-                ? <Link className="home-continue-button" to={'/assistir/' + item.slug}><Play size={11} fill="currentColor"/>{itemProgress ? 'Continuar aula' : 'Explorar minissérie'}</Link>
+                ? <Link className="home-continue-button" to={'/minisseries/' + item.slug}><Play size={11} fill="currentColor"/>{itemProgress ? 'Continuar aula' : 'Explorar minissérie'}</Link>
                 : <span className="home-continue-button home-continue-button--disabled">Em breve</span>}
             </div>
           </article>
@@ -348,100 +346,27 @@ function NativePodcastPlayer({ signedUrl, title, author, image, playing, onPlayi
   </div>
 }
 
-function PodcastDetailPanel({ item, allItems, activeSlug, playing, onClose, onPlay }: { item: ContentArea; allItems: ContentArea[]; activeSlug: string | null; playing: boolean; onClose: () => void; onPlay: (item: ContentArea, episodeAudioPath?: string) => void }) {
-  const nextItems = allItems.filter(i => i.slug !== item.slug)
-  const authorName = item.author.replace('Com ', '')
-  const authorPhoto = item.professorImage || getProfessorPhoto(authorName)
-  const episodes = item.lessons?.filter(l => l.audioPath).sort((a, b) => a.position - b.position) ?? []
-  return <aside className="pd-panel">
-      <div className="pd-cover"><img src={cardCover(item.image)} alt={`Capa de ${item.title}`}/></div>
-      <div className="pd-head">
-        <div>
-          <h2 className="pd-title">{item.title}</h2>
-          <span className="pd-author">{item.author.replace('Com ', '')}</span>
-        </div>
-        <button className="pd-close" onClick={onClose} aria-label="Fechar"><X size={16}/></button>
-      </div>
-      <div className="pd-body">
-        <p className="pd-desc">{item.description}</p>
-        {episodes.length === 0 && <button type="button" className="pd-play-btn" onClick={() => onPlay(item)} aria-label={activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}>{activeSlug === item.slug && playing ? <Pause size={16} fill="currentColor"/> : <Play size={16} fill="currentColor"/>} {activeSlug === item.slug && playing ? 'Pausar' : 'Reproduzir'}</button>}
-        {episodes.length > 0 && <div className="pd-section">
-          <div className="pd-section-head"><span>Episódios</span><span>{episodes.length} ep.</span></div>
-          {episodes.map(ep => <div className="pd-episode" key={ep.id ?? ep.position}>
-            <button type="button" className="pd-episode-play" aria-label={`Reproduzir episódio ${ep.position + 1}: ${ep.title}`} onClick={() => onPlay(item, ep.audioPath)}>
-              <Play size={14} fill="currentColor"/>
-            </button>
-            <div className="pd-episode-info">
-              <span className="pd-episode-num">Ep. {ep.position + 1}</span>
-              <strong>{ep.title}</strong>
-              {ep.durationSeconds > 0 && <span className="pd-episode-dur">{formatPodcastTime(ep.durationSeconds)}</span>}
-            </div>
-          </div>)}
-        </div>}
-        <div className="pd-section">
-          <div className="pd-section-head"><span>Créditos</span><button type="button">Mostrar tudo</button></div>
-          <div className="pd-credit-card">
-            <div className="pd-credit-avatar">{authorPhoto ? <img src={img(authorPhoto)} alt=""/> : authorName[0]}</div>
-            <div className="pd-credit-info">
-              <strong>{authorName}</strong>
-              <span>Criador Principal · {item.category}</span>
-            </div>
-          </div>
-        </div>
-        {nextItems.length > 0 && <div className="pd-section">
-          <div className="pd-section-head"><span>A seguir</span><button type="button">Abrir fila</button></div>
-          {nextItems.map(next => <div className="pd-next-item" key={next.slug}>
-            <div className="pd-next-thumb">
-              <img src={cardCover(next.image)} alt=""/>
-              <button type="button" className="pd-next-play" aria-label={activeSlug === next.slug && playing ? `Pausar ${next.title}` : `Reproduzir ${next.title}`} onClick={() => onPlay(next)}>{activeSlug === next.slug && playing ? <Pause size={15} fill="currentColor"/> : <Play size={15} fill="currentColor"/>}</button>
-            </div>
-            <div className="pd-next-info">
-              <strong>{next.title}</strong>
-              <span>{next.category} · {next.author.replace('Com ', '')}</span>
-            </div>
-          </div>)}
-        </div>}
-      </div>
-    </aside>
-}
-
 function PodcastsPage() {
   const { courses: podcastLibrary, loading: podcastsLoading } = useLibraryCourses()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const selectedPodcastSlug = searchParams.get('podcast')
+  const navigate = useNavigate()
   type ActivePodcastPlayer =
     | { kind: 'youtube'; slug: string; url: string; title: string; author: string; image?: string }
     | { kind: 'native'; slug: string; signedUrl: string; title: string; author: string; image?: string }
   const [activePlayer, setActivePlayer] = useState<ActivePodcastPlayer | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [playerLoading, setPlayerLoading] = useState<string | null>(null)
-  const [detailItem, setDetailItem] = useState<ContentArea | null>(null)
   const [activeFilter, setActiveFilter] = useState('Todos')
   const allPodcasts = podcastLibrary.filter(item => item.category === 'Podcasts')
   const items = activeFilter === 'Todos' ? allPodcasts : allPodcasts.filter(item => item.categoryTag === activeFilter)
 
   useEffect(() => { loadYT().catch(() => {}) }, [])
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (!selectedPodcastSlug) { setDetailItem(null); return }
-    const selected = items.find(item => item.slug === selectedPodcastSlug)
-    if (selected) setDetailItem(selected)
-  }, [selectedPodcastSlug, items])
 
-  const openPodcast = (item: ContentArea) => {
-    setDetailItem(item)
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.set('podcast', item.slug)
-    setSearchParams(nextParams)
-  }
   const togglePodcast = async (podcast: ContentArea, episodeAudioPath?: string) => {
-    if (activePlayer?.slug === podcast.slug && !episodeAudioPath) { setIsPlaying(current => !current); openPodcast(podcast); return }
-    // Resolve audio: explicit episode > course-level > first episode with audio
+    if (activePlayer?.slug === podcast.slug && !episodeAudioPath) { setIsPlaying(current => !current); return }
     const firstEpisode = podcast.lessons?.find(l => l.audioPath)
     const rawPath = episodeAudioPath ?? podcast.audioPath ?? firstEpisode?.audioPath
     let source: ReturnType<typeof resolveAudioSource> = null
     try { source = resolveAudioSource(rawPath) } catch { /* caminho inválido; cai no fallback */ }
-    // Build player title: include episode number/title when playing a specific episode
     let playerTitle = podcast.title
     if (rawPath && rawPath !== podcast.audioPath && podcast.lessons) {
       const ep = podcast.lessons.find(l => l.audioPath === rawPath)
@@ -451,10 +376,8 @@ function PodcastsPage() {
       if (source.url) {
         setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: source.url, title: playerTitle, author: podcast.author.replace('Com ', ''), image: podcast.image })
         setIsPlaying(true)
-        openPodcast(podcast)
         return
       }
-      // url vazia significa VITE_MEDIA_BASE_URL não configurada; cai no fallback de YouTube
     } else if (source?.kind === 'supabase' && supabase) {
       setPlayerLoading(podcast.slug)
       try {
@@ -462,7 +385,6 @@ function PodcastsPage() {
         if (data?.signedUrl) {
           setActivePlayer({ kind: 'native', slug: podcast.slug, signedUrl: data.signedUrl, title: playerTitle, author: podcast.author.replace('Com ', ''), image: podcast.image })
           setIsPlaying(true)
-          openPodcast(podcast)
           return
         }
       } catch { /* fallback to YouTube */ }
@@ -472,20 +394,12 @@ function PodcastsPage() {
     if (!url) return
     setActivePlayer({ kind: 'youtube', slug: podcast.slug, url, title: podcast.title, author: podcast.author.replace('Com ', ''), image: podcast.image })
     setIsPlaying(true)
-    openPodcast(podcast)
-  }
-
-  const closePodcast = () => {
-    setDetailItem(null)
-    const nextParams = new URLSearchParams(searchParams)
-    nextParams.delete('podcast')
-    setSearchParams(nextParams, { replace: true })
   }
 
   return <div className="app-shell app-shell--home">
     <Sidebar />
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page"><div className="home-content">
-    <section className="ms-hero" style={{ backgroundImage: `url(${img('/images/hero-minisseries.png')})` }}>
+    <section className="ms-hero" style={{ backgroundImage: `url(${img('/images/bg-podcast.png')})`, backgroundPosition: '100% 25%' }}>
       <div className="ms-hero-shade" aria-hidden="true"/>
       <div className="ms-hero-content">
         <div className="ms-hero-copy">
@@ -513,7 +427,7 @@ function PodcastsPage() {
       </div>
       <div className="podcast-list">
         {items.map(item => (
-          <article className="podcast-item" key={item.slug} onClick={() => openPodcast(item)} style={{cursor:'pointer'}}>
+          <article className="podcast-item" key={item.slug} onClick={() => navigate('/podcasts/' + item.slug)} style={{cursor:'pointer'}}>
             <button type="button" className={`podcast-thumb${podcastsLoading ? ' podcast-thumb--loading' : ''}`} aria-label={activePlayer?.slug === item.slug && isPlaying ? `Pausar ${item.title}` : `Reproduzir ${item.title}`} onClick={e => { e.stopPropagation(); void togglePodcast(item) }}>
               <img key={cardCover(item.image)} src={cardCover(item.image)} alt=""/>
               <span className="podcast-thumb-play">{playerLoading === item.slug ? <LoaderCircle size={20} className="podcast-play-spinner"/> : activePlayer?.slug === item.slug && isPlaying ? <Pause size={20} fill="currentColor"/> : <Play size={20} fill="currentColor"/>}</span>
@@ -538,7 +452,236 @@ function PodcastsPage() {
     {activePlayer?.kind === 'native' && <NativePodcastPlayer key={activePlayer.signedUrl} signedUrl={activePlayer.signedUrl} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
     {activePlayer?.kind === 'youtube' && <PodcastAudioPlayer videoId={getYouTubeId(activePlayer.url)!} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null) }}/>}
   </div></main></div>
-  {detailItem && <PodcastDetailPanel item={detailItem} allItems={items} activeSlug={activePlayer?.slug ?? null} playing={isPlaying} onClose={closePodcast} onPlay={(item, audioPath) => { void togglePodcast(item, audioPath) }}/>}
+  </div>
+}
+
+function PodcastDetailPage() {
+  const { slug } = useParams<{ slug: string }>()
+  const { courses: allCourses, loading } = useLibraryCourses()
+  const podcast = allCourses.find(c => c.slug === slug && c.category === 'Podcasts')
+  type ActivePodcastPlayer =
+    | { kind: 'youtube'; slug: string; url: string; title: string; author: string; image?: string }
+    | { kind: 'native'; slug: string; signedUrl: string; title: string; author: string; image?: string }
+  const [activePlayer, setActivePlayer] = useState<ActivePodcastPlayer | null>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [playerLoading, setPlayerLoading] = useState<string | null>(null)
+  const [activePath, setActivePath] = useState<string | null>(null)
+  const [queueExpanded, setQueueExpanded] = useState(false)
+  const [authorModalOpen, setAuthorModalOpen] = useState(false)
+  const [authorModalClosing, setAuthorModalClosing] = useState(false)
+  const authorModalCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const closeAuthorModal = useCallback(() => {
+    if (authorModalCloseTimer.current) window.clearTimeout(authorModalCloseTimer.current)
+    setAuthorModalClosing(true)
+    authorModalCloseTimer.current = window.setTimeout(() => {
+      setAuthorModalOpen(false)
+      setAuthorModalClosing(false)
+      authorModalCloseTimer.current = null
+    }, 180)
+  }, [])
+
+  useEffect(() => { loadYT().catch(() => {}) }, [])
+
+  useEffect(() => () => {
+    if (authorModalCloseTimer.current) window.clearTimeout(authorModalCloseTimer.current)
+  }, [])
+
+  useEffect(() => {
+    if (!authorModalOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeAuthorModal() }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [authorModalOpen, closeAuthorModal])
+
+  const episodes = podcast?.lessons?.filter(l => l.audioPath).sort((a, b) => a.position - b.position) ?? []
+  const currentEpisodeIndex = episodes.findIndex(episode => episode.audioPath === activePath)
+  const upcomingEpisode = currentEpisodeIndex < 0 ? episodes[0] : episodes[currentEpisodeIndex + 1]
+  const queuedPodcasts = allCourses.filter(item => item.category === 'Podcasts' && item.slug !== podcast?.slug)
+  const upcomingPodcast = !upcomingEpisode ? queuedPodcasts[0] : undefined
+  const podcastsAfterNext = upcomingPodcast ? queuedPodcasts.slice(1) : queuedPodcasts
+  const authorName = podcast?.author.replace('Com ', '') ?? ''
+  const authorPhoto = podcast ? (podcast.professorImage || getProfessorPhoto(authorName)) : undefined
+  const normalizedAuthorName = authorName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR')
+  const isEnio = normalizedAuthorName.includes('enio')
+  const isEric = normalizedAuthorName.includes('eric')
+  const authorBio = isEnio
+    ? 'Grande empresário e mentor, Énio Mota compartilha ideias sobre estratégia, gestão e criação de valor para ajudar empreendedores a desenvolver negócios sólidos.'
+    : isEric
+      ? 'Grande empresário e mentor, Éric Pereira inspira empreendedores a fortalecer a mentalidade, desenvolver confiança e transformar objetivos em ações concretas.'
+      : `Grande empresário e mentor, ${authorName} compartilha sua experiência para inspirar empreendedores e apoiar o crescimento de novos negócios.`
+  const authorCurriculum = isEnio
+    ? ['Empresário e empreendedor', 'Mentor de empreendedores e negócios', 'Foco em estratégia, gestão e criação de valor']
+    : isEric
+      ? ['Empresário e empreendedor', 'Mentor de empreendedores', 'Foco em mentalidade, desenvolvimento pessoal e crescimento profissional']
+      : ['Empresário e empreendedor', 'Mentor de empreendedores', 'Atuação em estratégia e crescimento de negócios']
+
+  const play = async (p: ContentArea, episodeAudioPath?: string) => {
+    if (activePlayer?.slug === p.slug && episodeAudioPath === activePath) { setIsPlaying(v => !v); return }
+    const firstEpisode = p.lessons?.find(l => l.audioPath)
+    const rawPath = episodeAudioPath ?? p.audioPath ?? firstEpisode?.audioPath
+    let source: ReturnType<typeof resolveAudioSource> = null
+    try { source = resolveAudioSource(rawPath) } catch { /* fallback */ }
+    let playerTitle = p.title
+    if (rawPath && rawPath !== p.audioPath && p.lessons) {
+      const ep = p.lessons.find(l => l.audioPath === rawPath)
+      if (ep) playerTitle = `Ep. ${ep.position + 1} — ${ep.title}`
+    }
+    if (source?.kind === 'host') {
+      if (source.url) {
+        setActivePlayer({ kind: 'native', slug: p.slug, signedUrl: source.url, title: playerTitle, author: p.author.replace('Com ', ''), image: p.image })
+        setActivePath(rawPath ?? null)
+        setIsPlaying(true)
+        return
+      }
+    } else if (source?.kind === 'supabase' && supabase) {
+      setPlayerLoading(p.slug)
+      try {
+        const { data } = await supabase.storage.from('podcast-audio').createSignedUrl(source.path, 3600)
+        if (data?.signedUrl) {
+          setActivePlayer({ kind: 'native', slug: p.slug, signedUrl: data.signedUrl, title: playerTitle, author: p.author.replace('Com ', ''), image: p.image })
+          setActivePath(rawPath ?? null)
+          setIsPlaying(true)
+          return
+        }
+      } catch { /* fallback */ } finally { setPlayerLoading(null) }
+    }
+    const url = p.spotifyUrl || p.videoUrl || courseVideoUrls[p.slug]
+    if (!url) return
+    setActivePlayer({ kind: 'youtube', slug: p.slug, url, title: p.title, author: p.author.replace('Com ', ''), image: p.image })
+    setActivePath(null)
+    setIsPlaying(true)
+  }
+
+  if (!loading && !podcast) return <div className="app-shell app-shell--home"><Sidebar/><div className="site-shell"><main className="dashboard-home"><div style={{padding:'80px 0',textAlign:'center',color:'#5a7a9a',fontSize:14}}>Podcast não encontrado.</div></main></div></div>
+
+  const coverUrl = cardCover(podcast?.image)
+
+  return <div className="app-shell app-shell--home">
+    <Sidebar/>
+    <div className="site-shell">
+      <main className="pcast-main">
+
+        {/* ── COLUNA PRINCIPAL ── */}
+        <div className="pcast-content">
+
+          {/* HERO */}
+          <div className="pcast-hero" style={{ backgroundImage: `url(${coverUrl})` }}>
+            <div className="pcast-hero-shade"/>
+            <Link to="/podcasts" className="pcast-back"><ArrowLeft size={14}/> Podcasts</Link>
+            {podcast && <div className="pcast-controls">
+              <button type="button" className="pcast-big-play" onClick={() => void play(podcast, episodes[0]?.audioPath)} aria-label={activePlayer?.slug === podcast.slug && isPlaying ? 'Pausar' : 'Reproduzir'}>
+                {activePlayer?.slug === podcast.slug && isPlaying ? <Pause size={22} fill="currentColor"/> : <Play size={22} fill="currentColor"/>}
+              </button>
+              {episodes.length > 0 && <span className="pcast-controls-info">{episodes.length} episódio{episodes.length !== 1 ? 's' : ''}</span>}
+            </div>}
+          </div>
+
+          {/* TRACK LIST */}
+          {podcast && episodes.length > 0 && <div className="pcast-track-list" id="pcast-track-list">
+            <div className="pcast-track-header">
+              <span className="pcast-th-num">#</span>
+              <span>Título</span>
+              <span className="pcast-th-podcast">Podcast</span>
+              <span className="pcast-th-dur"><Clock size={14}/></span>
+            </div>
+            {episodes.map((ep, i) => {
+              const isActive = activePlayer?.slug === podcast.slug && activePath === ep.audioPath
+              return <div className={`pcast-track-row${isActive ? ' pcast-track-row--active' : ''}`} key={ep.id ?? ep.position} onClick={() => void play(podcast, ep.audioPath)}>
+                <div className="pcast-track-num">
+                  <span className="pcast-track-num-text">{i + 1}</span>
+                  <span className="pcast-track-play-icon">
+                    {playerLoading === podcast.slug ? <LoaderCircle size={14} className="podcast-play-spinner"/> : isActive && isPlaying ? <Pause size={14} fill="currentColor"/> : <Play size={14} fill="currentColor"/>}
+                  </span>
+                </div>
+                <div className="pcast-track-main">
+                  <img src={coverUrl} className="pcast-track-thumb" alt=""/>
+                  <div className="pcast-track-info">
+                    <strong className={`pcast-track-title${isActive ? ' pcast-track-title--active' : ''}`}>{ep.title}</strong>
+                    <span className="pcast-track-author">{authorName}</span>
+                  </div>
+                </div>
+                <span className="pcast-track-podcast">{podcast.title}</span>
+                <span className="pcast-track-dur">{ep.durationSeconds > 0 ? formatPodcastTime(ep.durationSeconds) : '—'}</span>
+              </div>
+            })}
+          </div>}
+
+        </div>{/* fim pcast-content */}
+
+        {/* ── PAINEL LATERAL ── */}
+        {podcast && <aside className="pcast-panel">
+          <div className="pcast-panel-body">
+            {authorPhoto && <div className="pcast-panel-section">
+              <div className="pcast-panel-artist-card" role="button" tabIndex={0} onClick={() => { setAuthorModalClosing(false); setAuthorModalOpen(true) }} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setAuthorModalClosing(false); setAuthorModalOpen(true) } }} aria-haspopup="dialog" aria-label={`Ver informações e currículo de ${authorName}`}>
+                <img src={img(authorPhoto)} className="pcast-panel-artist-img" alt=""/>
+                <span className="pcast-panel-section-label pcast-panel-artist-label">Sobre o autor</span>
+                <div className="pcast-panel-artist-info">
+                  <strong>{authorName}</strong>
+                  <p>{authorBio}</p>
+                </div>
+              </div>
+            </div>}
+            <div className="pcast-panel-section">
+              <div className="pcast-panel-description-card">
+                <span className="pcast-panel-section-label">Sobre o podcast</span>
+                <p className="pcast-panel-desc">{podcast.description}</p>
+              </div>
+            </div>
+            {(upcomingEpisode || upcomingPodcast) && <div className="pcast-panel-section pcast-panel-up-next">
+              <div className="pcast-panel-queue-heading">
+                <span className="pcast-panel-section-label">A seguir</span>
+                {podcastsAfterNext.length > 0 && <button type="button" onClick={() => setQueueExpanded(expanded => !expanded)} aria-expanded={queueExpanded} aria-controls="pcast-panel-queue-rest">
+                  {queueExpanded ? 'Fechar fila' : 'Abrir fila'}
+                </button>}
+              </div>
+              {upcomingEpisode && podcast
+                ? <button type="button" className="pcast-panel-next-item" onClick={() => void play(podcast, upcomingEpisode.audioPath)}>
+                    <img src={cardCover(podcast.image)} alt=""/>
+                    <span><strong>{upcomingEpisode.title}</strong><small>{authorName}</small></span>
+                  </button>
+                : upcomingPodcast && <Link className="pcast-panel-next-item" to={'/podcasts/' + upcomingPodcast.slug}>
+                    <img src={cardCover(upcomingPodcast.image)} alt=""/>
+                    <span><strong>{upcomingPodcast.title}</strong><small>{upcomingPodcast.author.replace('Com ', '')}</small></span>
+                  </Link>}
+              {podcastsAfterNext.length > 0 && <div id="pcast-panel-queue-rest" className={`pcast-panel-queue-rest${queueExpanded ? ' is-open' : ''}`}>
+                <div className="pcast-panel-queue-rest-inner">
+                  {podcastsAfterNext.map(item => <Link className="pcast-panel-next-item" to={'/podcasts/' + item.slug} key={item.slug}>
+                    <img src={cardCover(item.image)} alt=""/>
+                    <span><strong>{item.title}</strong><small>{item.author.replace('Com ', '')}</small></span>
+                  </Link>)}
+                </div>
+              </div>}
+            </div>}
+          </div>
+        </aside>}
+
+      </main>
+    </div>
+    {authorModalOpen && authorPhoto && <div className={`pcast-author-modal-backdrop${authorModalClosing ? ' pcast-author-modal-closing' : ''}`} onClick={closeAuthorModal}>
+      <section className="pcast-author-modal" role="dialog" aria-modal="true" aria-labelledby="pcast-author-modal-title" onClick={event => event.stopPropagation()}>
+        <img className="pcast-author-modal-photo" src={img(authorPhoto)} alt={authorName}/>
+        <div className="pcast-author-modal-content">
+          <button type="button" className="pcast-author-modal-close" onClick={closeAuthorModal} aria-label="Fechar"><X size={20}/></button>
+          <span className="pcast-author-modal-eyebrow">SOBRE O AUTOR</span>
+          <h2 id="pcast-author-modal-title">{authorName}</h2>
+          <p className="pcast-author-modal-bio">{authorBio}</p>
+          <div className="pcast-author-modal-cv">
+            <h3>Currículo</h3>
+            <ul>
+              {authorCurriculum.map(item => <li key={item}>{item}</li>)}
+            </ul>
+          </div>
+        </div>
+      </section>
+    </div>}
+    {activePlayer?.kind === 'native' && <NativePodcastPlayer key={activePlayer.signedUrl} signedUrl={activePlayer.signedUrl} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null); setActivePath(null) }}/>}
+    {activePlayer?.kind === 'youtube' && <PodcastAudioPlayer videoId={getYouTubeId(activePlayer.url)!} title={activePlayer.title} author={activePlayer.author} image={activePlayer.image} playing={isPlaying} onPlayingChange={setIsPlaying} onClose={() => { setIsPlaying(false); setActivePlayer(null); setActivePath(null) }}/>}
   </div>
 }
 
@@ -587,6 +730,87 @@ const formatWatchDuration = (secs: number): string => {
   return secs >= 3600
     ? `${Math.floor(secs / 3600)}:${String(m % 60).padStart(2,'0')}:${String(s).padStart(2,'0')}`
     : `${m}:${String(s).padStart(2,'0')}`
+}
+
+function MiniseriesDetailPage() {
+  const { slug } = useParams<{ slug: string }>()
+  const { courses: allCourses, loading } = useLibraryCourses()
+  const navigate = useNavigate()
+  const series = allCourses.find(c => c.slug === slug && c.category === 'Minisséries')
+  type MsLesson = { id: string; title: string; position: number; durationSeconds: number }
+  const [lessons, setLessons] = useState<MsLesson[]>([])
+
+  useEffect(() => {
+    const client = supabase
+    if (!client || !series?.slug) return
+    let active = true
+    client.from('courses').select('id').eq('slug', series.slug).maybeSingle().then(({ data: courseRow }) => {
+      if (!active || !courseRow) return
+      client.from('lessons').select('id,title,position,duration_seconds').eq('course_id', courseRow.id).order('position').then(({ data: rows }) => {
+        if (!active || !rows) return
+        setLessons(rows.map((l: { id: string; title: string; position: number; duration_seconds: number }) => ({ id: l.id, title: l.title, position: l.position, durationSeconds: l.duration_seconds })))
+      })
+    })
+    return () => { active = false }
+  }, [series?.slug])
+
+  if (!series && loading) return (
+    <div className="app-shell app-shell--home"><Sidebar/>
+      <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '120px 0' }}>
+          <LoaderCircle size={28} style={{ color: '#5a7a9a' }} className="watch-loading-icon"/>
+        </div>
+      </main></div>
+    </div>
+  )
+  if (!series) return <NotFound />
+
+  const coverUrl = cardCover(series.image)
+  const lessonCount = lessons.length || series.videoCount || 0
+
+  return (
+    <div className="app-shell app-shell--home">
+      <Sidebar/>
+      <div className="site-shell">
+        <main className="ms-detail-page">
+          {/* HERO */}
+          <div className="ms-detail-hero" style={{ backgroundImage: `url(${coverUrl})` }}>
+            <div className="ms-detail-hero-shade"/>
+            <Link to="/minisseries" className="ms-detail-back"><ArrowLeft size={14}/> Minisséries</Link>
+            <div className="ms-detail-actions-bar">
+              <button type="button" className="ms-detail-play-btn" onClick={() => void navigate(`/assistir/${series.slug}`)}>
+                <Play size={18} fill="currentColor"/> Assistir agora
+              </button>
+              {lessonCount > 0 && <span className="ms-detail-count">{lessonCount} aula{lessonCount !== 1 ? 's' : ''}</span>}
+            </div>
+          </div>
+
+          {/* EPISODES */}
+          <div className="ms-detail-lessons">
+            <h2 className="ms-detail-lessons-title">Aulas</h2>
+            <div className="ms-detail-card-grid">
+              {lessons.map((lesson, i) => (
+                <div className="ms-detail-card" key={lesson.id} onClick={() => void navigate(`/assistir/${series.slug}`)}>
+                  <div className="ms-detail-card-thumb">
+                    <img src={coverUrl} alt=""/>
+                    {lesson.durationSeconds > 0 && <span className="ms-detail-card-dur">{formatPodcastTime(lesson.durationSeconds)}</span>}
+                    <span className="ms-detail-card-overlay"><Play size={20} fill="currentColor"/></span>
+                  </div>
+                  <div className="ms-detail-card-body">
+                    <div className="ms-detail-card-num">{String(i + 1).padStart(2, '0')}</div>
+                    <div className="ms-detail-card-meta">
+                      <strong className="ms-detail-card-title">{lesson.title}</strong>
+                      <span className="ms-detail-card-author">{series.author.replace('Com ', '')}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  )
 }
 
 function WatchPage() {
@@ -1381,7 +1605,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
   if (user) return <Navigate to="/" replace />
   const submit = async (event: FormEvent) => { event.preventDefault(); setError(''); setLoading(true); const message = await signIn(identifier, password); setLoading(false); if (message) setError(message); else navigate('/') }
-  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/><Link className="brand login-brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link><div className="login-art-copy"><p className="eyebrow">PENSAR. CONSTRUIR. CRESCER.</p><h1>ACADEMIA DO<br/>EMPREENDEDOR</h1><p>Um espaço para aprender, partilhar e avançar em conjunto.</p></div><span className="login-art-foot">UM ESPAÇO PRIVADO DE CONHECIMENTO</span></div><section className="login-form-side"><div className="login-mobile-brand"><Link className="brand" to="/"><img className="brand-logo" src={img('/images/logo.webp')} alt=""/><span className="brand-name">ACADEMIA <b>DO EMPREENDEDOR</b></span></Link></div><div className="login-form-wrap"><span className="login-icon"><ShieldCheck size={19}/></span><p className="eyebrow">BEM-VINDO DE VOLTA</p><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="email" autoComplete="email" placeholder="nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
+  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/></div><section className="login-form-side"><div className="login-form-wrap"><div className="login-form-brand"><Link className="brand" to="/" aria-label="Academia do Empreendedor"><img className="brand-logo" src={img('/images/logo.png')} alt=""/></Link><p>Um espaço para aprender, partilhar e<br/>avançar em conjunto.</p></div><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="email" autoComplete="email" placeholder="nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
 }
 
 function NotFound() { return <Shell><PageContent><div className="not-found"><span className="eyebrow">404 · PÁGINA NÃO ENCONTRADA</span><h1>Este caminho ainda<br/>não existe.</h1><ButtonLink to="/">Voltar ao início</ButtonLink></div></PageContent></Shell> }
@@ -1391,7 +1615,9 @@ export default function App() {
     <Route path="/login" element={<LoginPage/>}/>
     <Route path="/" element={<Protected><DashboardHome/></Protected>}/>
     <Route path="/minisseries" element={<Protected><MinisSeriesPage/></Protected>}/>
+    <Route path="/minisseries/:slug" element={<Protected><MiniseriesDetailPage/></Protected>}/>
     <Route path="/podcasts" element={<Protected><PodcastsPage/></Protected>}/>
+    <Route path="/podcasts/:slug" element={<Protected><PodcastDetailPage/></Protected>}/>
     <Route path="/assistir/:slug" element={<Protected><WatchPage/></Protected>}/>
     <Route path="/entrevistas" element={<Protected><InterviewsPage/></Protected>}/>
     <Route path="/entrevistas/:slug" element={<Protected><InterviewWatchPage/></Protected>}/>

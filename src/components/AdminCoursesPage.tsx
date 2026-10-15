@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { ArrowLeft, ArrowUpRight, BarChart2, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Eye, FileText, GraduationCap, Grid2X2, Hash, ImageIcon, ImagePlus, Info, LayoutDashboard, Lightbulb, Link2, ListVideo, LoaderCircle, LogOut, Mail, Mic2, Music, Newspaper, Pencil, Plus, Save, Search, Sparkles, SpellCheck, Trash2, Type, Upload, User, Users, Video, X } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, CheckCircle2, ChevronDown, ChevronUp, Clock, Eye, FileText, GraduationCap, Grid2X2, Hash, ImageIcon, ImagePlus, Info, LayoutDashboard, Lightbulb, Link2, ListVideo, LoaderCircle, LogOut, Mail, Mic2, Music, Newspaper, Pencil, Plus, Save, Search, Sparkles, SpellCheck, Trash2, Type, Upload, User, Users, Video, X } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAdminAuth } from '../auth/useAdminAuth'
 import { adminSupabase } from '../lib/supabase'
@@ -1084,7 +1084,6 @@ export function AdminCoursesPage() {
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><CheckCircle2 size={24}/></span><span>Publicados</span><strong className="published">{visibleCourses.filter(c => c.status === 'published').length}</strong><Waveform color="green"/></div>
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><CalendarDays size={24}/></span><span>Agendados</span><strong className="scheduled">{visibleCourses.filter(c => c.status === 'scheduled').length}</strong><Waveform color="blue"/></div>
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><FileText size={24}/></span><span>Rascunhos</span><strong>{visibleCourses.filter(c => c.status === 'draft').length}</strong><Waveform color="silver"/></div>
-        <div className="admin-section-stat"><span className="admin-section-stat-icon"><BarChart2 size={24}/></span><span>Visualizações este mês</span><strong>{stats.visitsThisMonth.toLocaleString('pt-BR')}</strong><Waveform color="purple"/></div>
       </div>
       <div className="admin-filter-bar">
         <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={`Buscar ${meta.plural} ou autores…`}/></label>

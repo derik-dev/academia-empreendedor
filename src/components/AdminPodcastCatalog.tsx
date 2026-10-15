@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ArrowUpRight, BarChart2, CalendarDays, Eye, FileText, Grid2X2, List, Mic2, Pencil, Play, Plus, Search, Trash2, User, Video } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { ArrowUpRight, CalendarDays, Eye, FileText, Grid2X2, List, Mic2, Pencil, Play, Plus, Search, Trash2, User, Video } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { adminSupabase } from '../lib/supabase'
 import { img } from '../lib/publicUrl'
 import { cardCover } from '../lib/cardCover'
 import { getProfessorPhoto } from '../lib/adminAuthors'
@@ -37,20 +36,6 @@ export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDele
   const [author, setAuthor] = useState('')
   const [order, setOrder] = useState<'newest' | 'oldest'>('newest')
   const [layout, setLayout] = useState<'list' | 'grid'>('list')
-  const [viewsThisMonth, setViewsThisMonth] = useState(0)
-  const slugs = courses.map(course => course.slug).join(',')
-
-  useEffect(() => {
-    if (!adminSupabase || !slugs) return
-    let active = true
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-    void adminSupabase.from('course_access_events').select('id', { count: 'exact', head: true })
-      .in('course_slug', slugs.split(',')).gte('accessed_at', monthStart)
-      .then(({ count, error }) => { if (active && !error) setViewsThisMonth(count ?? 0) })
-    return () => { active = false }
-  }, [slugs])
-
   const authors = [...new Set(courses.map(course => course.instructor).filter(Boolean))].sort()
   const filtered = useMemo(() => courses
     .filter(course => !query || [course.title, course.instructor, course.description].some(value => value.toLowerCase().includes(query.toLowerCase())))
@@ -78,7 +63,6 @@ export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDele
         <article className="podcast-admin-stat podcast-admin-stat--blue"><span className="podcast-admin-stat-icon">{isInterview ? <Video size={25}/> : <Mic2 size={25}/>}</span><div><span>Total de {isInterview ? 'entrevistas' : 'podcasts'}</span><strong>{loading ? '—' : courses.length}</strong></div><Waveform/></article>
         <article className="podcast-admin-stat podcast-admin-stat--green"><span className="podcast-admin-stat-icon"><Play size={24}/></span><div><span>Publicados</span><strong>{loading ? '—' : courses.filter(course => course.status === 'published').length}</strong></div><Waveform color="green"/></article>
         <article className="podcast-admin-stat podcast-admin-stat--silver"><span className="podcast-admin-stat-icon"><FileText size={24}/></span><div><span>Rascunhos</span><strong>{loading ? '—' : courses.filter(course => course.status === 'draft').length}</strong></div><Waveform color="silver"/></article>
-        <article className="podcast-admin-stat podcast-admin-stat--purple"><span className="podcast-admin-stat-icon"><BarChart2 size={24}/></span><div><span>Visualizações este mês</span><strong>{viewsThisMonth}</strong></div><Waveform color="purple"/></article>
       </div>
 
       <div className="podcast-admin-filters">
