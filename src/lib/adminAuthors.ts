@@ -4,10 +4,22 @@ const professorPhotos: Record<string, string> = {
   'eric': '/images/professores/eric-pereira.png',
 }
 
-export function getProfessorPhoto(name: string): string | undefined {
-  const normalizedName = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim()
-  const exactMatch = professorPhotos[normalizedName]
-  if (exactMatch) return exactMatch
+const authorCardCovers: Record<string, string> = {
+  'eric pereira': '/images/cards-provisorios/eric.png',
+  'eric': '/images/cards-provisorios/eric.png',
+  'enio mota': '/images/cards-provisorios/enio.png',
+}
 
-  return Object.entries(professorPhotos).find(([author]) => normalizedName.includes(author))?.[1]
+function normalize(name: string) {
+  return name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim()
+}
+
+export function getProfessorPhoto(name: string): string | undefined {
+  const n = normalize(name)
+  return professorPhotos[n] ?? Object.entries(professorPhotos).find(([k]) => n.includes(k))?.[1]
+}
+
+export function getAuthorCardCover(name: string): string | undefined {
+  const n = normalize(name)
+  return authorCardCovers[n] ?? Object.entries(authorCardCovers).find(([k]) => n.includes(k))?.[1]
 }

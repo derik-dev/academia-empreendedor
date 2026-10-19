@@ -43,9 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const email = identifier.trim().toLowerCase()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (!error) return null
-    if (error.code === 'invalid_credentials' || error.code === 'user_not_found') return 'Usuário, e-mail ou senha incorretos.'
-    if (error.code === 'email_not_confirmed') return 'Confirme seu endereço de e-mail antes de entrar.'
-    return 'Não foi possível entrar. Verifique seus dados e tente novamente.'
+    if (error.code === 'invalid_credentials' || error.code === 'user_not_found') return 'Utilizador, e-mail ou palavra-passe incorretos.'
+    if (error.code === 'email_not_confirmed') return 'Confirme o seu endereço de e-mail antes de entrar.'
+    return 'Não foi possível entrar. Verifique os seus dados e tente novamente.'
   }
   const signOut = async () => { if (supabase) await supabase.auth.signOut() }
   return <AuthContext.Provider value={{ user: session?.user ?? null, loading, configured: isSupabaseConfigured, signIn, signOut }}>{children}</AuthContext.Provider>

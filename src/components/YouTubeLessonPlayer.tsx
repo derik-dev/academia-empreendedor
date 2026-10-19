@@ -288,7 +288,7 @@ export function YouTubeLessonPlayer({ courseSlug, lessonId, videoUrl }: { course
   return <div className="youtube-player-shell" data-current-time={currentTime} data-duration={duration} data-progress-percent={shownPercent}>
     <div className="youtube-player-aspect">
       <div className="youtube-player-frame" ref={containerRef} />
-      {!ready && !playerError && <div className="youtube-player-loading" role="status"><span className="youtube-player-spinner"/>Carregando vídeo...</div>}
+      {!ready && !playerError && <div className="youtube-player-loading" role="status"><span className="youtube-player-spinner"/>A carregar vídeo...</div>}
       {playerError && <div className="youtube-player-error" role="alert"><span className="eyebrow">PLAYER DO YOUTUBE</span><p>{playerError}</p></div>}
     </div>
     <div className="lesson-progress-summary" aria-live="polite">

@@ -11,3 +11,10 @@ supabase/functions/.env
 *.log
 plataforma-publicacao/
 plataforma-publicacao.zip
+
+# Ficheiros de média locais (nunca versionar áudio/vídeo no git)
+*.wav
+*.mp3
+
+# Pasta de imagens de trabalho local (não é asset da aplicação)
+img/

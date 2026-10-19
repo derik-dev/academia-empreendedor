@@ -97,17 +97,17 @@ function ArticleHomeCard({ article, cardWidth }: { article: { slug: string; titl
 }
 
 const categoryShortcuts = [
-  { title: 'Minisséries', description: 'Séries de aulas para aprofundar seus conhecimentos.', to: '/minisseries' },
-  { title: 'Podcasts', description: 'Conversas e episódios para ouvir quando quiser.', to: '/podcasts' },
-  { title: 'Blog e artigos', description: 'Ideias, análises e conteúdos para leitura.', to: '/blog' },
-  { title: 'Entrevistas', description: 'Conversas com empreendedores e especialistas.', to: '/entrevistas' },
-  { title: 'Gravações do Zoom', description: 'Encontros gravados para assistir no seu ritmo.', to: '/gravacoes-zoom' },
+  { title: 'Minisséries', description: 'Séries de aulas para aprofundar seus conhecimentos.', to: '/minisseries', image: '/images/cards-da-home/minisseries.png' },
+  { title: 'Podcasts', description: 'Conversas e episódios para ouvir quando quiser.', to: '/podcasts', image: '/images/cards-da-home/podcasts.png' },
+  { title: 'Blog e artigos', description: 'Ideias, análises e conteúdos para leitura.', to: '/blog', image: '/images/cards-da-home/blog.png' },
+  { title: 'Entrevistas', description: 'Conversas com empreendedores e especialistas.', to: '/entrevistas', image: '/images/cards-da-home/entrevistas.png' },
+  { title: 'Gravações do Zoom', description: 'Encontros gravados para assistir no seu ritmo.', to: '/gravacoes-zoom', image: '/images/cards-da-home/gravacoes-do-zoom.png' },
 ]
 
-function CategoryShortcutCard({ title, description, to, cardWidth }: { title: string; description: string; to: string; cardWidth: number }) {
+function CategoryShortcutCard({ title, description, to, image, cardWidth }: { title: string; description: string; to: string; image: string; cardWidth: number }) {
   return <article className="home-learning-card home-category-card" style={cardWidth ? { flex: '0 0 ' + cardWidth + 'px' } : undefined}>
     <Link to={to} className="home-learning-image" aria-label={'Explorar ' + title}>
-      <img src={img('/images/category-placeholder.svg')} alt="" />
+      <img src={img(image)} alt="" />
     </Link>
     <div className="home-learning-body">
       <div className="home-card-title"><h3>{title}</h3><MoreVertical size={15}/></div>
@@ -252,7 +252,7 @@ export function DashboardHome() {
     <div className="site-shell"><main className="dashboard-home dashboard-home--reference dashboard-home--spacious-cards">
       <div className="home-content">
         <section className="home-welcome">
-          <div className="home-welcome-copy"><h1>Olá, {displayName}</h1><p>Continue sua jornada de aprendizagem.</p></div>
+          <div className="home-welcome-copy"><h1>Olá, {displayName}</h1><p>Continue a sua jornada de aprendizagem.</p></div>
           <div className="home-search-bar"><SearchHeader /></div>
           <div className="home-welcome-actions">
             <div className="topbar-notification" ref={notifRef}>
@@ -263,7 +263,7 @@ export function DashboardHome() {
               {notifOpen && <div className="notif-panel">
                 <div className="notif-panel-header"><span>Notificações</span></div>
                 {notifsLoading
-                  ? <div className="notif-empty">Carregando…</div>
+                  ? <div className="notif-empty">A carregar…</div>
                   : notifications.length === 0
                     ? <div className="notif-empty">Nenhuma notificação ainda.</div>
                     : <div className="notif-list">
@@ -288,7 +288,7 @@ export function DashboardHome() {
           </div>
         </section>
 
-        <section className="home-feature">
+        <section className="home-feature" ref={wrapRef}>
           <div className="home-feature-image" style={{backgroundImage: `url(${img('/images/home-ideas-04.jpg')})`}} aria-hidden="true" />
           <div className="home-feature-shade" aria-hidden="true" />
           <div className="home-feature-copy">
@@ -302,7 +302,7 @@ export function DashboardHome() {
           {courses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel loading={coursesLoading}/>)}
         </HomeShelf>
 
-        <section className="home-learning" id="meus-cursos">
+        {continueCourses.length > 0 && <section className="home-learning" id="meus-cursos">
           <div className="home-section-heading">
             <SectionTitle title="Continue assistindo"/>
             <Link to="/minisseries">Ver meus cursos <ArrowRight size={16}/></Link>
@@ -310,15 +310,13 @@ export function DashboardHome() {
           <div className="home-carousel-wrap">
             {canPrev && <button type="button" className="home-carousel-btn home-carousel-btn--left" onClick={() => setCarouselIndex(i => i - 1)} aria-label="Anterior"><ChevronLeft size={28}/></button>}
             {canNext && <button type="button" className="home-carousel-btn home-carousel-btn--right" onClick={() => setCarouselIndex(i => i + 1)} aria-label="Próximo"><ChevronRight size={28}/></button>}
-          <div className="home-carousel-inner" ref={wrapRef}>
+          <div className="home-carousel-inner">
           <div className="home-carousel-track" style={{transform: `translateX(-${carouselIndex * (cardWidth + GAP)}px)`}}>
-            {continueCourses.length
-              ? continueCourses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel />)
-              : <p className="home-library-empty">Os conteúdos que você assistir aparecerão aqui.</p>}
+            {continueCourses.map(course => <LearningCard key={course.slug} course={course} itemProgress={progress[course.slug]} cardWidth={cardWidth} carousel />)}
           </div>
           </div>
           </div>
-        </section>
+        </section>}
 
 
         <div className="home-content-shelves">

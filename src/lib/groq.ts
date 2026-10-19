@@ -11,7 +11,7 @@ async function callAI(
   if (error) {
     let detail = ''
     try { const body = await (error as { context?: { json?: () => Promise<{ error?: { message?: string } }> } })?.context?.json?.(); detail = body?.error?.message ?? '' } catch { /* ignore JSON parse errors */ }
-    throw new Error(detail || error.message || 'Não foi possível acessar o serviço de IA.')
+    throw new Error(detail || error.message || 'Não foi possível aceder ao serviço de IA.')
   }
   const result = data as { choices?: { message?: { content?: string } }[]; error?: { message?: string } } | null
   if (result?.error?.message) throw new Error(result.error.message)
@@ -24,7 +24,7 @@ export async function sortLessonsByAI(lessons: { id: string; title: string }[]):
     [
       {
         role: 'system',
-        content: `Você recebe uma lista de títulos de aulas de uma minissérie (cada linha: índice_atual: título). Determine a ordem lógica de exibição — considere numeração ("aula 01", "ep 3"), palavras como "introdução", "abertura", "encerramento", "bônus" e contexto. Retorne um objeto JSON: {"order": [índices na ordem correta]}. Exemplo: {"order": [2, 0, 1, 3]}`,
+        content: `Recebe uma lista de títulos de aulas de uma minissérie (cada linha: índice_atual: título). Determina a ordem lógica de apresentação, considerando a numeração ("aula 01", "ep. 3"), termos como "introdução", "abertura", "encerramento", "bónus" e o contexto. Devolve um objeto JSON: {"order": [índices pela ordem correta]}. Exemplo: {"order": [2, 0, 1, 3]}`,
       },
       { role: 'user', content: list },
     ],
@@ -47,7 +47,7 @@ export async function correctText(text: string): Promise<string> {
     {
       role: 'system',
       content:
-        'Você é um revisor de textos em português. Corrija apenas erros ortográficos, gramaticais e de pontuação — sem alterar o estilo, estrutura ou conteúdo. Retorne somente o texto corrigido, sem comentários adicionais.',
+        'É um revisor de textos em português de Portugal. Corrige apenas erros ortográficos, gramaticais e de pontuação, respeitando a ortografia e as construções do português europeu, sem alterar o estilo, a estrutura ou o conteúdo. Devolve apenas o texto corrigido, sem comentários adicionais.',
     },
     { role: 'user', content: `Corrija o texto a seguir:\n\n${text}` },
   ])
@@ -74,18 +74,18 @@ export async function generateArticle(p: GenerateParams): Promise<GeneratedArtic
     [
       {
         role: 'system',
-        content: `Você é o redator-chefe da Academia do Empreendedor — plataforma premium de educação em empreendedorismo e mentalidade. Seu trabalho é escrever artigos de blog completos, profundos e bem estruturados, no estilo de publicações como Harvard Business Review, Exame, Forbes Brasil e blogs do Cortex.
+        content: `É o redator-chefe da Academia do Empreendedor — plataforma premium de educação em empreendedorismo e mentalidade. O seu trabalho é escrever artigos de blog completos, profundos e bem estruturados, no estilo de publicações como Harvard Business Review, Exame, Forbes Portugal e blogs do Cortex.
 
 REGRAS OBRIGATÓRIAS:
 - Escreva um artigo COMPLETO, não um resumo nem uma lista de dicas
 - O campo "content" deve ter cerca de ${targetChars} caracteres SEM contar espaços (desconsidere também as tags HTML na contagem) — essa métrica equivale a ${mins} minuto${mins > 1 ? 's' : ''} de leitura real (2.000 caracteres sem espaços por minuto)
-- Estrutura obrigatória: abertura com gancho (história, dado ou provocação), desenvolvimento com 3 a 5 seções com subtítulos <h2>, cada seção com pelo menos 2 parágrafos densos, e fechamento com conclusão reflexiva
+- Estrutura obrigatória: abertura com gancho (história, dado ou provocação), desenvolvimento com 3 a 5 secções com subtítulos <h2>, cada secção com pelo menos 2 parágrafos densos, e fechamento com conclusão reflexiva
 - Use exemplos reais ou hipotéticos concretos para ilustrar os pontos
 - Alterne entre parágrafos narrativos, análises e momentos mais diretos
 - Use <strong> para destacar conceitos-chave (não exagere)
 - Não use bullet points simples — prefira prosa argumentativa
 - Tom: direto, inteligente, sem corporativês, que fala com quem já empreende ou quer empreender
-- Idioma: português do Brasil
+- Idioma: português de Portugal
 
 Responda SOMENTE com JSON válido neste formato exato:
 {

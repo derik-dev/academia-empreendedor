@@ -36,6 +36,7 @@ export type CourseDraft = {
   removedLessonIds: string[]
   removedLessonAudioPaths: string[]
   articleCategory: string
+  blogAuthor: string
   interviewAuthor: string
   zoomType: string
   zoomCategory: string
@@ -63,6 +64,7 @@ export const blankDraft: CourseDraft = {
   removedLessonIds: [],
   removedLessonAudioPaths: [],
   articleCategory: 'Mentalidade',
+  blogAuthor: '',
   interviewAuthor: '',
   zoomType: 'Aula',
   zoomCategory: '',

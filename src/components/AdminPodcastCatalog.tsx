@@ -19,7 +19,7 @@ type Props = {
   variant?: 'podcast' | 'interview'
 }
 
-const dateLabel = (value: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(value))
+const dateLabel = (value: string) => new Intl.DateTimeFormat('pt-PT', { dateStyle: 'medium' }).format(new Date(value))
 const waveBars = [3, 7, 4, 12, 19, 9, 4, 15, 26, 11, 5, 8, 17, 31, 19, 8, 4, 13, 23, 10, 5, 3]
 
 export function Waveform({ color = 'blue' }: { color?: 'blue' | 'green' | 'silver' | 'purple' }) {
@@ -66,8 +66,8 @@ export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDele
       </div>
 
       <div className="podcast-admin-filters">
-        <label className="podcast-admin-search"><Search size={19}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isInterview ? 'Buscar entrevistas ou convidados...' : 'Buscar podcasts ou autores...'} aria-label={isInterview ? 'Buscar entrevistas ou convidados' : 'Buscar podcasts ou autores'}/></label>
-        <AdminSelect className="podcast-admin-filter-select" ariaLabel="Filtrar por status" value={status} onChange={value => setStatus(value as typeof status)} options={[{ value: 'all', label: 'Todos os status' }, { value: 'published', label: 'Publicados' }, { value: 'scheduled', label: 'Agendados' }, { value: 'draft', label: 'Rascunhos' }]}/>
+        <label className="podcast-admin-search"><Search size={19}/><input value={query} onChange={event => setQuery(event.target.value)} placeholder={isInterview ? 'Pesquisar entrevistas ou convidados...' : 'Pesquisar podcasts ou autores...'} aria-label={isInterview ? 'Pesquisar entrevistas ou convidados' : 'Pesquisar podcasts ou autores'}/></label>
+        <AdminSelect className="podcast-admin-filter-select" ariaLabel="Filtrar por estado" value={status} onChange={value => setStatus(value as typeof status)} options={[{ value: 'all', label: 'Todos os estados' }, { value: 'published', label: 'Publicados' }, { value: 'scheduled', label: 'Agendados' }, { value: 'draft', label: 'Rascunhos' }]}/>
         <AdminSelect className="podcast-admin-filter-select" ariaLabel={isInterview ? 'Filtrar por convidado' : 'Filtrar por autor'} value={author} onChange={setAuthor} options={[{ value: '', label: isInterview ? 'Todos os convidados' : 'Todos os autores' }, ...authors.map(name => ({ value: name, label: name, avatar: getProfessorPhoto(name) ? img(getProfessorPhoto(name)!) : undefined }))]}/>
         <AdminSelect className="podcast-admin-filter-select" ariaLabel={`Ordenar ${title.toLowerCase()}`} value={order} onChange={value => setOrder(value as typeof order)} options={[{ value: 'newest', label: 'Mais recentes' }, { value: 'oldest', label: 'Mais antigos' }]}/>
       </div>
@@ -76,18 +76,18 @@ export function AdminPodcastCatalog({ courses, loading, onCreate, onEdit, onDele
         <div><p className="podcast-admin-eyebrow">CATÁLOGO</p><h2>{title}</h2></div>
         <div className="podcast-admin-layout" role="group" aria-label="Modo de visualização">
           <button type="button" className={layout === 'list' ? 'active' : ''} aria-pressed={layout === 'list'} onClick={() => setLayout('list')}><List size={18}/> Lista</button>
-          <button type="button" className={layout === 'grid' ? 'active' : ''} aria-pressed={layout === 'grid'} onClick={() => setLayout('grid')}><Grid2X2 size={17}/> Grade</button>
+          <button type="button" className={layout === 'grid' ? 'active' : ''} aria-pressed={layout === 'grid'} onClick={() => setLayout('grid')}><Grid2X2 size={17}/> Grelha</button>
         </div>
       </div>
 
-      {loading ? <p className="podcast-admin-empty">Carregando {title.toLowerCase()}…</p> : filtered.length ? <div className={`podcast-admin-items podcast-admin-items--${layout}`}>
+      {loading ? <p className="podcast-admin-empty">A carregar {title.toLowerCase()}…</p> : filtered.length ? <div className={`podcast-admin-items podcast-admin-items--${layout}`}>
         {filtered.map(course => <article className={`podcast-admin-item${isInterview ? ' podcast-admin-item--interview' : ''}`} key={course.id}>
           <div className="podcast-admin-cover"><img src={cardCover(course.cover_url || areaImage[course.slug])} alt=""/>{isInterview && <span className="podcast-admin-interview-tag"><Video size={12}/> Entrevista</span>}{!isInterview && course.lesson_count != null && course.lesson_count > 0 && <span className="podcast-admin-duration"><Play size={12} fill="currentColor"/> {course.lesson_count} ep.</span>}{(!course.lesson_count || course.lesson_count === 0) && course.duration_text && <span className="podcast-admin-duration"><Play size={12} fill="currentColor"/> {course.duration_text}</span>}</div>
           <div className="podcast-admin-item-copy"><h3>{course.title}</h3><span className="podcast-admin-author"><User size={14}/> {isInterview ? 'Convidado' : 'Participantes'}: {course.instructor || 'Não informado'}</span><p>{course.description}</p><div className="podcast-admin-item-meta"><span className={`podcast-admin-status podcast-admin-status--${course.status}`}><i/>{course.status === 'published' ? 'Publicado' : course.status === 'scheduled' ? 'Agendado' : 'Rascunho'}</span><span><CalendarDays size={15}/> {dateLabel(course.published_at || course.created_at)}</span></div></div>
           <Waveform color={course.status === 'published' ? 'blue' : 'silver'}/>
-          <div className="podcast-admin-item-actions"><Link to={isInterview ? `/entrevistas/${course.slug}` : `/podcasts?podcast=${course.slug}`} className="podcast-admin-action" title="Ver no site" aria-label={`Ver ${course.title} no site`}><Eye size={18}/></Link><button className="podcast-admin-action" type="button" title="Editar" aria-label={`Editar ${course.title}`} onClick={() => onEdit(course)}><Pencil size={18}/></button><button className="podcast-admin-action podcast-admin-action--danger" type="button" title="Excluir" aria-label={`Excluir ${course.title}`} onClick={() => onDelete(course)}><Trash2 size={18}/></button></div>
+          <div className="podcast-admin-item-actions"><Link to={isInterview ? `/entrevistas/${course.slug}` : `/podcasts?podcast=${course.slug}`} className="podcast-admin-action" title="Ver no site" aria-label={`Ver ${course.title} no site`}><Eye size={18}/></Link><button className="podcast-admin-action" type="button" title="Editar" aria-label={`Editar ${course.title}`} onClick={() => onEdit(course)}><Pencil size={18}/></button><button className="podcast-admin-action podcast-admin-action--danger" type="button" title="Eliminar" aria-label={`Eliminar ${course.title}`} onClick={() => onDelete(course)}><Trash2 size={18}/></button></div>
         </article>)}
-      </div> : <div className="podcast-admin-empty">{courses.length ? `Nenhuma ${isInterview ? 'entrevista' : 'podcast'} corresponde aos filtros.` : `Nenhuma ${isInterview ? 'entrevista' : 'podcast'} cadastrada. Crie a primeira para começar.`}</div>}
+      </div> : <div className="podcast-admin-empty">{courses.length ? `Nenhuma ${isInterview ? 'entrevista' : 'podcast'} corresponde aos filtros.` : `Nenhuma ${isInterview ? 'entrevista' : 'podcast'} registada. Crie a primeira para começar.`}</div>}
     </div>
   </section>
 }

@@ -35,7 +35,7 @@ export function useNotifications() {
 
   useEffect(() => {
     let active = true
-    if (!supabase) { setLoading(false); return () => { active = false } }
+    if (!supabase) return () => { active = false }
     const client = supabase
 
     Promise.all([

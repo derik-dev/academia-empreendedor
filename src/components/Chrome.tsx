@@ -246,7 +246,7 @@ export function ProfilePage() {
     setSaving(true); setNameMsg('')
     const { error } = await supabase.auth.updateUser({ data: { full_name: nameValue } })
     setSaving(false)
-    if (error) setNameMsg('Erro ao salvar.')
+    if (error) setNameMsg('Erro ao guardar.')
     else { setNameMsg('Nome atualizado!'); setEditingName(false); setTimeout(() => setNameMsg(''), 3000) }
   }
 
@@ -255,7 +255,7 @@ export function ProfilePage() {
     setSaving(true); setEmailMsg('')
     const { error } = await supabase.auth.updateUser({ email: emailValue })
     setSaving(false)
-    if (error) setEmailMsg('Erro ao salvar.')
+    if (error) setEmailMsg('Erro ao guardar.')
     else { setEmailMsg('Confirme o novo email na caixa de entrada.'); setEditingEmail(false); setTimeout(() => setEmailMsg(''), 6000) }
   }
 
@@ -279,7 +279,7 @@ export function ProfilePage() {
         <div className="crop-modal-header"><span>Ajustar foto</span><button className="crop-close-btn" onClick={() => setCropSrc(null)}><X size={16}/></button></div>
         <div className="crop-area"><Cropper image={cropSrc} crop={crop} zoom={zoom} aspect={1} cropShape="round" showGrid={false} onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete}/></div>
         <div className="crop-controls"><ZoomOut size={15}/><input type="range" min={1} max={3} step={0.01} value={zoom} onChange={e => setZoom(Number(e.target.value))} className="crop-zoom-slider"/><ZoomIn size={15}/></div>
-        <div className="crop-actions"><button className="button button-secondary" onClick={() => setCropSrc(null)}>Cancelar</button><button className="button" onClick={confirmCrop}>Salvar foto</button></div>
+        <div className="crop-actions"><button className="button button-secondary" onClick={() => setCropSrc(null)}>Cancelar</button><button className="button" onClick={confirmCrop}>Guardar foto</button></div>
       </div>
     </div>}
 
@@ -393,7 +393,7 @@ export function ProfilePage() {
             <span className="field-label">Conta criada</span>
             <strong>{memberSince}</strong>
           </div>
-          {hasChanges && <button className="button pv3-save-btn" onClick={saveAll} disabled={saving}><Check size={14}/>{saving ? 'A salvar...' : 'Salvar alterações'}</button>}
+          {hasChanges && <button className="button pv3-save-btn" onClick={saveAll} disabled={saving}><Check size={14}/>{saving ? 'A guardar...' : 'Guardar alterações'}</button>}
         </div>
 
         <div className="pv3-card pv3-access-card">

@@ -76,19 +76,19 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   }, [sessionUserId])
 
   const signIn = async (identifier: string, password: string) => {
-    if (!adminSupabase) return 'O Supabase ainda não está configurado. Preencha as variáveis do arquivo .env.'
+    if (!adminSupabase) return 'O Supabase ainda não está configurado. Preencha as variáveis do ficheiro .env.'
     const email = identifier.trim().toLowerCase()
     const { data, error } = await adminSupabase.auth.signInWithPassword({ email, password })
     if (error || !data.user) {
-      if (error?.code === 'email_not_confirmed') return 'Confirme seu endereço de e-mail antes de entrar.'
-      if (error?.code === 'invalid_credentials' || error?.code === 'user_not_found') return 'Usuário, e-mail ou senha incorretos.'
-      return 'Não foi possível entrar. Verifique seus dados e tente novamente.'
+      if (error?.code === 'email_not_confirmed') return 'Confirme o seu endereço de e-mail antes de entrar.'
+      if (error?.code === 'invalid_credentials' || error?.code === 'user_not_found') return 'Utilizador, e-mail ou palavra-passe incorretos.'
+      return 'Não foi possível entrar. Verifique os seus dados e tente novamente.'
     }
 
     const { data: adminRecord, error: roleError } = await adminSupabase.from('admin_users').select('user_id').eq('user_id', data.user.id).maybeSingle()
     if (roleError || !adminRecord) {
       await adminSupabase.auth.signOut()
-      return 'Esta conta não está autorizada a acessar o painel administrativo.'
+      return 'Esta conta não está autorizada a aceder ao painel administrativo.'
     }
     setAdminStatus('allowed')
     setCheckedUserId(data.user.id)

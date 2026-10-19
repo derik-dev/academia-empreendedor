@@ -10,6 +10,7 @@ import { areas, courseVideoUrls, type ContentArea } from './data/content'
 import { useInterviews } from './data/useInterviews'
 import { useArticles } from './data/useArticles'
 import { useArticle } from './data/useArticle'
+import type { Article } from './types/article'
 import { useZoomRecordings } from './data/useZoomRecordings'
 import { usePublishedCourses } from './data/usePublishedCourses'
 import { YouTubeLessonPlayer } from './components/YouTubeLessonPlayer'
@@ -20,7 +21,7 @@ import { AdminLoginPage } from './components/AdminLoginPage'
 import { DashboardHome } from './components/DashboardHome'
 import { img } from './lib/publicUrl'
 import { cardCover } from './lib/cardCover'
-import { getProfessorPhoto } from './lib/adminAuthors'
+import { getAuthorCardCover, getProfessorPhoto } from './lib/adminAuthors'
 import { sanitizeHtml } from './lib/sanitizeHtml'
 import { normalizeSearch } from './lib/normalizeSearch'
 import { resolveAudioSource } from './lib/audioSource'
@@ -126,7 +127,7 @@ function MinisSeriesPage() {
         <div className="ms-hero-copy">
           <span className="ms-hero-eyebrow">MINISSÉRIE EM DESTAQUE</span>
           <h2 className="ms-hero-title">MINISSÉRIES</h2>
-          <p>Conteúdos práticos e profundos para você aprender,<br/>evoluir e construir o futuro que deseja.</p>
+          <p>Conteúdos práticos e profundos para aprender,<br/>evoluir e construir o futuro que deseja.</p>
         </div>
       </div>
       <div className="ms-hero-dots"><i className="active"/><i/><i/><i/></div>
@@ -456,7 +457,7 @@ function PodcastDetailPage() {
     ? 'Grande empresário e mentor, Énio Mota compartilha ideias sobre estratégia, gestão e criação de valor para ajudar empreendedores a desenvolver negócios sólidos.'
     : isEric
       ? 'Grande empresário e mentor, Éric Pereira inspira empreendedores a fortalecer a mentalidade, desenvolver confiança e transformar objetivos em ações concretas.'
-      : `Grande empresário e mentor, ${authorName} compartilha sua experiência para inspirar empreendedores e apoiar o crescimento de novos negócios.`
+      : `Grande empresário e mentor, ${authorName} partilha a sua experiência para inspirar empreendedores e apoiar o crescimento de novos negócios.`
   const authorCurriculum = isEnio
     ? ['Empresário e empreendedor', 'Mentor de empreendedores e negócios', 'Foco em estratégia, gestão e criação de valor']
     : isEric
@@ -634,13 +635,13 @@ function CourseNotes({ slug }: { slug: string }) {
     setSaving(true); setMessage('')
     const { error } = await supabase.from('course_notes').upsert({ user_id: user.id, course_slug: slug, body: notes, updated_at: new Date().toISOString() }, { onConflict: 'user_id,course_slug' })
     setSaving(false)
-    setMessage(error ? 'Não foi possível salvar. Tente novamente.' : 'Nota salva no banco de dados.')
+    setMessage(error ? 'Não foi possível guardar. Tente novamente.' : 'Nota guardada.')
   }
 
   return <section className="watch-notes" aria-labelledby="watch-notes-heading">
-    <div className="watch-notes-heading"><div><p className="eyebrow">SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">Minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. Suas notas são privadas e ficam salvas na sua conta.</p></div><span>{message || (loading ? 'Carregando suas notas…' : 'Suas anotações ficam vinculadas a este curso.')}</span></div>
+    <div className="watch-notes-heading"><div><p className="eyebrow">O SEU ESPAÇO DE ESTUDO</p><h2 id="watch-notes-heading">As minhas notas</h2><p className="watch-notes-description">Anote ideias e aprendizados enquanto assiste. As suas notas são privadas e ficam guardadas na sua conta.</p></div><span>{message || (loading ? 'A carregar as suas notas…' : 'As suas anotações ficam vinculadas a este curso.')}</span></div>
     <textarea id="course-notes" aria-label="Anotações deste curso" value={notes} onChange={e => { setNotes(e.target.value); setMessage('') }} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); void saveNotes() } }} placeholder="Anote ideias, aprendizados e próximos passos deste curso..." disabled={loading}/>
-    <div className="watch-notes-actions"><span>As notas são privadas e salvas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'Salvando…' : 'Salvar nota'}</button></div>
+    <div className="watch-notes-actions"><span>As notas são privadas e guardadas na sua conta.</span><button className="button" type="button" onClick={saveNotes} disabled={loading || saving || !user || !supabase}>{saving ? 'A guardar…' : 'Guardar nota'}</button></div>
   </section>
 }
 
@@ -1025,6 +1026,36 @@ function ZoomPage() {
   )
 }
 
+function toBlogAuthorSlug(name: string): string {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, '-')
+}
+
+function BlogListingCard({ article }: { article: Article }) {
+  const authorName = article.author?.trim() || 'Academia do Empreendedor'
+  const authorPhoto = getProfessorPhoto(authorName)
+
+  return <Link to={`/blog/${article.slug}`} className="blog-card blog-home-card">
+    <div className="home-learning-image blog-home-image">
+      <img src={article.image} alt=""/>
+      <span className="blog-cat-tag">{article.category.toUpperCase()}</span>
+    </div>
+    <div className="home-learning-body blog-home-body">
+      <h2 className="blog-home-title">{article.title}</h2>
+      <p className="home-card-author blog-home-author">
+        {authorPhoto
+          ? <img src={img(authorPhoto)} className="home-author-avatar home-author-avatar--photo" alt=""/>
+          : <span className="home-author-avatar">{authorName[0]?.toUpperCase()}</span>}
+        {authorName}
+      </p>
+      <div className="blog-article-meta">
+        <span><Calendar size={12}/> {article.date}</span>
+        <span className="blog-meta-sep"/>
+        <span><Clock size={12}/> {article.readTime}</span>
+      </div>
+    </div>
+  </Link>
+}
+
 function BlogPage() {
   const { articles, loading } = useArticles()
   const [filter, setFilter] = useState('Todos')
@@ -1038,6 +1069,11 @@ function BlogPage() {
       if (!q) return true
       return normalizeSearch(a.title).includes(q) || normalizeSearch(a.excerpt).includes(q)
     })
+
+  const authorCounts = new Map<string, number>()
+  for (const a of articles) {
+    if (a.author) authorCounts.set(a.author, (authorCounts.get(a.author) ?? 0) + 1)
+  }
 
   return <div className="app-shell app-shell--home">
     <Sidebar />
@@ -1054,6 +1090,24 @@ function BlogPage() {
       <div className="ms-hero-dots"><i className="active"/><i/><i/></div>
     </section>
 
+    {!loading && authorCounts.size > 0 && <div className="blog-authors">
+      <h2 className="blog-authors-title">Autores</h2>
+      <div className="blog-authors-grid">
+        {[...authorCounts.entries()].map(([name, count]) => {
+          const cover = getAuthorCardCover(name) ?? getProfessorPhoto(name)
+          return <Link to={`/blog/autor/${toBlogAuthorSlug(name)}`} className="blog-author-card" key={name}>
+            <div className="blog-author-card-image" style={cover ? {backgroundImage:`url(${img(cover)})`} : {}}>
+              <span className="blog-author-card-badge">{count} artigo{count !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="blog-author-card-body">
+              <span className="blog-author-card-label">Autor</span>
+              <strong className="blog-author-card-name">{name}</strong>
+            </div>
+          </Link>
+        })}
+      </div>
+    </div>}
+
     <div className="blog-toolbar">
       <div className="blog-cat-filters">
         {blogFilters.map(f => <button type="button" key={f} className={`blog-cat-btn${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>{f}</button>)}
@@ -1064,21 +1118,44 @@ function BlogPage() {
     {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar artigos…</div>}
     {!loading && filtered.length === 0 && <div style={{padding:'60px 0',textAlign:'center'}}>Nenhum artigo encontrado.</div>}
     {!loading && <div className="blog-uniform-grid">
-      {filtered.map(article => <Link to={`/blog/${article.slug}`} className="blog-card" key={article.slug}>
-        <div className="blog-card-img" style={{backgroundImage: `url(${article.image})`}}>
-          <span className="blog-cat-tag">{article.category.toUpperCase()}</span>
-        </div>
-        <div className="blog-card-body">
-          <h2 className="blog-card-title">{article.title}</h2>
-          <div className="blog-article-meta">
-            <span><Calendar size={12}/> {article.date}</span>
-            <span className="blog-meta-sep"/>
-            <span><Clock size={12}/> {article.readTime}</span>
-          </div>
-        </div>
-      </Link>)}
+      {filtered.map(article => <BlogListingCard article={article} key={article.slug}/>)}
     </div>}
   </div></main></div>
+  </div>
+}
+
+function BlogAuthorPage() {
+  const { authorSlug } = useParams<{ authorSlug: string }>()
+  const { articles, loading } = useArticles()
+  const authorName = articles.find(a => a.author && toBlogAuthorSlug(a.author) === authorSlug)?.author
+  const authorArticles = articles.filter(a => a.author && toBlogAuthorSlug(a.author) === authorSlug)
+  const photo = authorName ? getProfessorPhoto(authorName) : undefined
+  const cover = authorName ? (getAuthorCardCover(authorName) ?? photo) : undefined
+
+  return <div className="app-shell app-shell--home">
+    <Sidebar/>
+    <div className="site-shell"><main className="dashboard-home dashboard-home--reference miniseries-page blog-author-layout"><div className="home-content">
+      <div className="blog-author-page">
+        <div className="blog-author-banner" style={cover ? {backgroundImage:`url(${img(cover)})`} : {}}>
+          <Link to="/blog" className="blog-author-back"><ArrowLeft size={14}/> Blog</Link>
+          <div className="blog-author-banner-content">
+            {photo
+              ? <img src={img(photo)} className="blog-author-banner-avatar" alt={authorName}/>
+              : <div className="blog-author-banner-avatar blog-author-banner-avatar--initials">{authorName?.[0]}</div>
+            }
+            <div className="blog-author-banner-info">
+              <h1 className="blog-author-banner-name">{authorName ?? 'Autor'}</h1>
+              {!loading && <span className="blog-author-banner-count">{authorArticles.length} artigo{authorArticles.length !== 1 ? 's' : ''} publicado{authorArticles.length !== 1 ? 's' : ''}</span>}
+            </div>
+          </div>
+        </div>
+        {loading && <div className="screen-loader" style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a'}}>A carregar…</div>}
+        {!loading && authorArticles.length === 0 && <div style={{padding:'60px 0',textAlign:'center',color:'#5a7a9a',fontSize:15}}>Nenhum artigo encontrado.</div>}
+        {!loading && <div className="blog-uniform-grid">
+          {authorArticles.map(article => <BlogListingCard article={article} key={article.slug}/>)}
+        </div>}
+      </div>
+    </div></main></div>
   </div>
 }
 function BlogArticlePage() {
@@ -1176,7 +1253,7 @@ function BlogArticlePage() {
   </div>
 }
 
-function NoticesPage() { return <Shell><PageContent><PageHero className="notices-hero" eyebrow="COMUNIDADE EXCLUSIVA" title="Canal de Avisos" description="Acompanhe novidades sobre agenda, novas aulas e eventos online e presenciais." image={img('/images/avisos-comunidade-central.png')} action={{ label: 'Ver avisos', to: '#avisos' }}/><div id="avisos" className="notice-panel notice-page-panel"><div className="notice-copy"><p className="eyebrow"><span className="whatsapp-dot"/> CANAL DE AVISOS</p><h2>Faça parte da conversa.</h2><p>"Temos um grupo no WhatsApp privado e exclusivo onde colocamos informações sobre agenda, novas aulas e até sobre eventos online e presenciais."</p><div className="notice-coming"><span className="notice-lock"><LockKeyhole size={14}/></span> O convite estará disponível em breve.</div></div><div className="notice-page-art"><img src={img('/images/avisos-comunidade-central.png')} alt="Telemóvel com notificações da comunidade da Academia"/></div></div></PageContent></Shell> }
+function NoticesPage() { return <Shell><PageContent><PageHero className="notices-hero" eyebrow="COMUNIDADE EXCLUSIVA" title="Canal de Avisos" description="Acompanhe novidades sobre agenda, novas aulas e eventos online e presenciais." image={img('/images/canal-de-avisos.png')} action={{ label: 'Ver avisos', to: '#avisos' }}/><div id="avisos" className="notice-panel notice-page-panel"><div className="notice-copy"><p className="eyebrow"><span className="whatsapp-dot"/> CANAL DE AVISOS</p><h2>Faça parte da conversa.</h2><p>"Temos um grupo no WhatsApp privado e exclusivo onde colocamos informações sobre agenda, novas aulas e até sobre eventos online e presenciais."</p><div className="notice-coming"><span className="notice-lock"><LockKeyhole size={14}/></span> O convite estará disponível em breve.</div></div><div className="notice-page-art"><img src={img('/images/avisos-comunidade-central.png')} alt="Telemóvel com notificações da comunidade da Academia"/></div></div></PageContent></Shell> }
 
 function InterviewWatchPage() {
   const { slug } = useParams()
@@ -1244,7 +1321,7 @@ function InterviewWatchPage() {
                 <FileText size={15}/> Anotações
               </button>
               <button type="button" className={`iv-watch-btn${saved ? ' iv-watch-btn--active' : ''}`} onClick={() => setSaved(v => !v)}>
-                <Bookmark size={15} fill={saved ? 'currentColor' : 'none'}/> {saved ? 'Salvo' : 'Salvar na lista'}
+                <Bookmark size={15} fill={saved ? 'currentColor' : 'none'}/> {saved ? 'Guardado' : 'Guardar na lista'}
               </button>
             </div>
           </div>
@@ -1371,7 +1448,7 @@ function LoginPage() {
   const [loading, setLoading] = useState(false)
   if (user) return <Navigate to="/" replace />
   const submit = async (event: FormEvent) => { event.preventDefault(); setError(''); setLoading(true); const message = await signIn(identifier, password); setLoading(false); if (message) setError(message); else navigate('/') }
-  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/></div><section className="login-form-side"><div className="login-form-wrap"><div className="login-form-brand"><Link className="brand" to="/" aria-label="Academia do Empreendedor"><img className="brand-logo" src={img('/images/logo.png')} alt=""/></Link><p>Um espaço para aprender, partilhar e<br/>avançar em conjunto.</p></div><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="email" autoComplete="email" placeholder="nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Senha</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua senha" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
+  return <main className="login-screen"><div className="login-art"><img src={img('/images/login-academia-briefing.png')} alt="Empreendedor a escrever estratégia no quadro"/><div className="login-art-shade"/></div><section className="login-form-side"><div className="login-form-wrap"><div className="login-form-brand"><Link className="brand" to="/" aria-label="Academia do Empreendedor"><img className="brand-logo" src={img('/images/logo.png')} alt=""/></Link><p>Um espaço para aprender, partilhar e<br/>avançar em conjunto.</p></div><h2>Entre na Academia.</h2><p className="login-intro">Aceda à sua área privada com a sua conta.</p><form onSubmit={submit}><label htmlFor="identifier">E-mail</label><div className="input-wrap"><Mail size={17}/><input id="identifier" type="email" autoComplete="email" placeholder="nome@empresa.com" value={identifier} onChange={e => setIdentifier(e.target.value)} required/></div><label htmlFor="password">Palavra-passe</label><div className="input-wrap"><LockKeyhole size={17}/><input id="password" type="password" autoComplete="current-password" placeholder="A sua palavra-passe" value={password} onChange={e => setPassword(e.target.value)} required minLength={6}/></div>{error && <p className="form-error" role="alert">{error}</p>}<button className="button login-submit" type="submit" disabled={loading}>{loading ? <><span className="button-spinner"/>A entrar…</> : <>Entrar <ArrowRight size={16}/></>}</button></form>{!configured && <p className="config-hint"><span className="hint-dot"/> Para ativar o login, configure <code>.env</code> com as variáveis do Supabase.</p>}<div className="login-foot"><span>ACESSO À ÁREA PRIVADA</span><span>ACESSO POR CONTA</span></div></div><p className="login-copyright">© {new Date().getFullYear()} Academia do Empreendedor</p></section></main>
 }
 
 function NotFound() { return <Shell><PageContent><div className="not-found"><span className="eyebrow">404 · PÁGINA NÃO ENCONTRADA</span><h1>Este caminho ainda<br/>não existe.</h1><ButtonLink to="/">Voltar ao início</ButtonLink></div></PageContent></Shell> }
@@ -1388,6 +1465,7 @@ export default function App() {
     <Route path="/entrevistas" element={<Protected><InterviewsPage/></Protected>}/>
     <Route path="/entrevistas/:slug" element={<Protected><InterviewWatchPage/></Protected>}/>
     <Route path="/blog" element={<Protected><BlogPage/></Protected>}/>
+    <Route path="/blog/autor/:authorSlug" element={<Protected><BlogAuthorPage/></Protected>}/>
     <Route path="/blog/:slug" element={<Protected><BlogArticlePage/></Protected>}/>
     <Route path="/gravacoes-zoom" element={<Protected><ZoomPage/></Protected>}/>
     <Route path="/gravacoes-zoom/:id" element={<Protected><ZoomWatchPage/></Protected>}/>

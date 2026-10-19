@@ -12,7 +12,27 @@ Nunca use chaves secretas, `service_role` ou `OPENAI_API_KEY` em variáveis `VIT
 
 ## Endereços e publicação
 
-A aplicação está configurada para ser publicada sob `/academia/`. O `base` do Vite, o `basename` do React Router e o fallback do Apache seguem esse prefixo. Publique os arquivos de `dist/` no diretório web correspondente a `/academia/`. Para publicar em outro caminho, defina `VITE_BASE_PATH` no ambiente de build e atualize o `RewriteBase` no `.htaccess`. A página de vendas em `/` é independente e não deve ser sobrescrita por esse bundle.
+A aplicação está publicada em `https://empreendedorsemdor.com/plataforma/`. O `base` do Vite, o `basename` do React Router e o `RewriteBase` do Apache seguem esse prefixo. A página de vendas em `/` é independente e não deve ser sobrescrita por esse bundle.
+
+### Gerar o build de produção e publicar
+
+```bash
+# 1. Gere o bundle com o caminho correto
+VITE_BASE_PATH=/plataforma/ npm run build
+
+# 2. Publique o conteúdo de dist/ no servidor Apache
+#    no diretório que responde por /plataforma/
+#    (ex.: public_html/plataforma/ na Hostinger)
+#
+# ATENÇÃO: o dist/.htaccess gerado pelo build já contém
+#   RewriteBase /plataforma/
+# Certifique-se de que esse arquivo sobrescreve qualquer
+# .htaccess anterior na pasta de destino no servidor.
+# Um .htaccess antigo com RewriteBase /academia/ quebra
+# o roteamento do React Router.
+```
+
+Para publicar em outro caminho, defina `VITE_BASE_PATH` conforme acima e verifique que o `RewriteBase` no `.htaccess` resultante corresponde ao mesmo caminho.
 
 ## Banco de dados e migrations
 

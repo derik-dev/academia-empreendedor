@@ -49,7 +49,7 @@ const sectionInfo: Record<AdminSection, { title: string; description: string; pu
   blog: { title: 'Blog e artigos', description: 'Acompanhe os artigos e conteúdos editoriais.', publicPath: '/blog' },
   zoom: { title: 'Gravações do Zoom', description: 'Acompanhe as gravações de aulas e encontros.', publicPath: '/gravacoes-zoom' },
   notices: { title: 'Canal de avisos', description: 'Acompanhe a página de novidades e avisos da comunidade.', publicPath: '/avisos' },
-  students: { title: 'Alunos', description: 'Gerencie os alunos cadastrados na Academia.' },
+  students: { title: 'Alunos', description: 'Gira os alunos registados na Academia.' },
 }
 
 function AdminFeedback({ type, message, onClose, modal = false }: { type: 'success' | 'error'; message: string; onClose: () => void; modal?: boolean }) {
@@ -80,7 +80,7 @@ function AdminShell({ children, section, onSectionChange }: { children: React.Re
       {adminSections.map(({ id, label, Icon }) => <Link key={id} to={id === 'overview' ? '/admin' : `/admin?section=${id}`} onClick={() => onSectionChange?.(id)} className={`admin-side-link${section === id ? ' active' : ''}`} aria-current={section === id ? 'page' : undefined}><Icon size={17}/> {label}</Link>)}
       <div className="admin-promo-card">
         <strong>Academia Admin</strong>
-        <p>Gerencie cursos, alunos e conteúdo da plataforma.</p>
+        <p>Gira os cursos, os alunos e os conteúdos da plataforma.</p>
         <Link to="/" className="admin-promo-btn">Abrir Academia</Link>
       </div>
       <div className="admin-sidebar-bottom">
@@ -145,7 +145,7 @@ function uploadAudioWithProgress(
     xhr.onload = () => {
       if (xhr.status === 401) { reject(new Error('A sessão expirou. Inicie sessão novamente.')); return }
       if (xhr.status === 403) { reject(new Error('Esta conta não tem permissão de administrador.')); return }
-      if (xhr.status === 413) { reject(new Error('O arquivo é grande demais. Envie um MP3 com menos de 150 MB.')); return }
+      if (xhr.status === 413) { reject(new Error('O ficheiro é demasiado grande. Envie um MP3 com menos de 150 MB.')); return }
       if (xhr.status === 415) { reject(new Error('Envie apenas ficheiros MP3. Converta o WAV para MP3 antes de enviar.')); return }
 
       let body: unknown
@@ -211,16 +211,16 @@ const sectionCats: Partial<Record<AdminSection, Course['category'][]>> = {
   podcasts: ['podcast'], interviews: ['interview'], zoom: ['zoom_recording'], blog: ['blog'],
 }
 const sectionMeta: Partial<Record<AdminSection, { item: string; plural: string; eyebrow: string; titleLabel: string; authorLabel: string; videoLabel: string }>> = {
-  courses:    { item: 'minissérie', plural: 'minisséries', eyebrow: 'MINISSÉRIES', titleLabel: 'Título da minissérie', authorLabel: 'Autor', videoLabel: 'Link da aula' },
-  podcasts:   { item: 'podcast',    plural: 'podcasts',    eyebrow: 'PODCASTS',     titleLabel: 'Título do podcast',    authorLabel: 'Autores',        videoLabel: 'Link do áudio' },
-  interviews: { item: 'entrevista', plural: 'entrevistas', eyebrow: 'ENTREVISTAS',  titleLabel: 'Título da entrevista', authorLabel: 'Convidado',      videoLabel: 'Link do vídeo' },
-  zoom:       { item: 'gravação',   plural: 'gravações',   eyebrow: 'GRAVAÇÕES',    titleLabel: 'Título da gravação',   authorLabel: 'Apresentador',   videoLabel: 'Link do vídeo' },
-  blog:       { item: 'artigo',     plural: 'artigos',     eyebrow: 'BLOG',         titleLabel: 'Título do artigo',     authorLabel: 'Autor',          videoLabel: 'Link do vídeo' },
+  courses:    { item: 'minissérie', plural: 'minisséries', eyebrow: 'MINISSÉRIES', titleLabel: 'Título da minissérie', authorLabel: 'Autor', videoLabel: 'Ligação da aula' },
+  podcasts:   { item: 'podcast',    plural: 'podcasts',    eyebrow: 'PODCASTS',     titleLabel: 'Título do podcast',    authorLabel: 'Autores',        videoLabel: 'Ligação do áudio' },
+  interviews: { item: 'entrevista', plural: 'entrevistas', eyebrow: 'ENTREVISTAS',  titleLabel: 'Título da entrevista', authorLabel: 'Convidado',      videoLabel: 'Ligação do vídeo' },
+  zoom:       { item: 'gravação',   plural: 'gravações',   eyebrow: 'GRAVAÇÕES',    titleLabel: 'Título da gravação',   authorLabel: 'Apresentador',   videoLabel: 'Ligação do vídeo' },
+  blog:       { item: 'artigo',     plural: 'artigos',     eyebrow: 'BLOG',         titleLabel: 'Título do artigo',     authorLabel: 'Autor',          videoLabel: 'Ligação do vídeo' },
 }
 const areaImage: Record<string, string> = Object.fromEntries(areas.map(a => [a.slug, a.image]))
 
-const monthName = (date: Date) => new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(date).replace('.', '')
-const dateLabel = (value: string) => new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium' }).format(new Date(value))
+const monthName = (date: Date) => new Intl.DateTimeFormat('pt-PT', { month: 'short' }).format(date).replace('.', '')
+const dateLabel = (value: string) => new Intl.DateTimeFormat('pt-PT', { dateStyle: 'medium' }).format(new Date(value))
 const slugify = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 const formatDurationSeconds = (secs: number): string => {
@@ -405,7 +405,7 @@ export function AdminCoursesPage() {
     const uploadUrl = import.meta.env.VITE_AUDIO_UPLOAD_URL
     if (!uploadUrl) return
     try {
-      // Segurança: não apagar se outro conteúdo usa o mesmo arquivo de áudio.
+      // Segurança: não apagar se outro conteúdo utilizar o mesmo ficheiro de áudio.
       if (adminSupabase) {
         const [{ data: sharingCourses }, { data: sharingLessons }] = await Promise.all([
           adminSupabase.from('courses').select('id').eq('audio_path', audioPath).limit(1),
@@ -504,11 +504,11 @@ export function AdminCoursesPage() {
     const failed = [allStudents.error, newStudents.error, publishedCourses.error, courseRows.error, recentAccessRows.error, ...monthlyVisitResults.map(r => r.error)].find(Boolean)
     const visitCounts = monthlyVisitResults.map(result => result.count ?? 0)
     setMonthlyVisits(visitCounts)
-    // Busca histórico de alunos por mês de forma não-fatal (pode falhar por RLS sem bloquear o dashboard)
+    // Consulta o histórico mensal de alunos; uma falha de RLS não bloqueia o painel.
     Promise.all(monthRanges.map(({ start, end }) => client.from('profiles').select('id', { count: 'exact', head: true }).neq('id', userId).gte('created_at', start.toISOString()).lt('created_at', end.toISOString())))
       .then(results => { if (results.every(r => !r.error)) setMonthlyStudents(results.map(r => r.count ?? 0)) })
       .catch(() => { /* silencioso — sparklines ficam vazios */ })
-    setError(failed ? 'Não foi possível carregar todos os dados. Confira se a migration do painel foi aplicada.' : '')
+    setError(failed ? 'Não foi possível carregar todos os dados. Confirme se a migração do painel foi aplicada.' : '')
     setStats({ students: allStudents.count ?? 0, newStudents: newStudents.count ?? 0, publishedCourses: publishedCourses.count ?? 0, visitsThisMonth: visitCounts[visitCounts.length - 1] ?? 0 })
     const [interviewRows, articleRows, zoomRows, categoryRows] = await Promise.all([
       client.from('interviews').select('id,slug,title,subtitle,guest,guest_role,author,cover_url,duration,video_id,published_at,status,scheduled_for,created_at').order('created_at', { ascending: false }),
@@ -518,7 +518,7 @@ export function AdminCoursesPage() {
     ])
     if (!categoryRows.error && categoryRows.data) {
       const customCategories = categoryRows.data.map(category => ({ value: category.name, label: category.name, color: category.color }))
-      setArticleCategories([...defaultArticleCategories, ...customCategories.filter(category => !defaultArticleCategories.some(defaultCategory => defaultCategory.value.toLocaleLowerCase('pt-BR') === category.value.toLocaleLowerCase('pt-BR')))])
+      setArticleCategories([...defaultArticleCategories, ...customCategories.filter(category => !defaultArticleCategories.some(defaultCategory => defaultCategory.value.toLocaleLowerCase('pt-PT') === category.value.toLocaleLowerCase('pt-PT')))])
     }
     const mappedInterviews: Course[] = (interviewRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.subtitle ?? '', cover_url: r.cover_url ?? '', instructor: r.guest ?? '', category: 'interview' as const, video_url: r.video_id ? `https://www.youtube.com/watch?v=${r.video_id}` : null, body: null, lesson_count: null, duration_text: r.duration ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, position: null, audio_path: null, interview_author: r.author ?? undefined, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
     const mappedArticles: Course[] = (articleRows.data ?? []).map(r => ({ id: r.id, slug: r.slug, title: r.title, description: r.excerpt ?? '', cover_url: r.image_url ?? '', instructor: '', category: 'blog' as const, video_url: null, body: null, lesson_count: null, duration_text: r.read_time ?? null, level: null, status: r.status as Course['status'], notes_enabled: false, published_at: r.published_at, scheduled_for: r.scheduled_for ?? null, position: null, audio_path: null, created_at: r.created_at ?? r.published_at ?? new Date().toISOString() }))
@@ -597,7 +597,7 @@ export function AdminCoursesPage() {
     event.preventDefault()
     const name = newCategoryName.trim()
     if (!adminSupabase || !name || categorySaving) return
-    if (articleCategories.some(category => category.value.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'))) {
+    if (articleCategories.some(category => category.value.toLocaleLowerCase('pt-PT') === name.toLocaleLowerCase('pt-PT'))) {
       setCategoryError('Já existe uma categoria com esse nome.')
       return
     }
@@ -611,7 +611,7 @@ export function AdminCoursesPage() {
     const { data, error: insertError } = await adminSupabase.from('article_categories').insert({ name, slug, color: newCategoryColor }).select('name,color').single()
     setCategorySaving(false)
     if (insertError || !data) {
-      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível salvar. Confira se a migration de categorias do blog foi aplicada.')
+      setCategoryError(insertError?.code === '23505' ? 'Já existe uma categoria com esse nome.' : 'Não foi possível guardar. Verifique se a migração de categorias do blog foi aplicada.')
       return
     }
     setArticleCategories(current => [...current, { value: data.name, label: data.name, color: data.color }])
@@ -645,7 +645,7 @@ export function AdminCoursesPage() {
     setPlaylistFetching(true); setPlaylistError(''); setPlaylistItems([])
     const { data, error } = await adminSupabase.functions.invoke('youtube-playlist', { body: { playlist_url: playlistUrl.trim() } })
     setPlaylistFetching(false)
-    if (error || !data?.videos) { setPlaylistError(await readFnError(error, data, 'Não foi possível buscar a playlist.')); return }
+    if (error || !data?.videos) { setPlaylistError(await readFnError(error, data, 'Não foi possível carregar a lista de reprodução.')); return }
     const items = data.videos as PlaylistVideoItem[]
     setPlaylistItems(items)
     setPlaylistSelected(new Set(items.map(v => v.videoId)))
@@ -698,10 +698,10 @@ export function AdminCoursesPage() {
     if (!title.trim()) { setLessonFormError(`Informe o título ${isPodcast ? 'do episódio' : 'da aula'}.`); return }
     if (!isPodcast) {
       if (!videoUrl.trim()) { setLessonFormError('Informe o link do YouTube.'); return }
-      if (!getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Link do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
+      if (!getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Ligação do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
     } else {
       if (!audioPath.trim() && !videoUrl.trim()) { setLessonFormError('Adicione um ficheiro MP3 ou um link de YouTube para o episódio.'); return }
-      if (videoUrl.trim() && !getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Link do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
+      if (videoUrl.trim() && !getYouTubeVideoId(videoUrl.trim())) { setLessonFormError('Ligação do YouTube inválido. Cole um link como youtube.com/watch?v=…'); return }
     }
     const durationSeconds = parseDurationInput(durationText)
     let finalCoverUrl = coverPreview
@@ -769,9 +769,9 @@ export function AdminCoursesPage() {
       const parts = [backendError.message, backendError.details, backendError.hint]
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
       if (parts.length) return parts.join(' ')
-      if (typeof backendError.code === 'string') return `Erro ${backendError.code} ao salvar o conteúdo.`
+      if (typeof backendError.code === 'string') return `Erro ${backendError.code} ao guardar o conteúdo.`
     }
-    return `Não foi possível salvar ${sectionMeta[section]?.item ?? 'o conteúdo'}.`
+    return `Não foi possível guardar ${sectionMeta[section]?.item ?? 'o conteúdo'}.`
   }
 
   const saveCourse = async (event: FormEvent) => {
@@ -783,7 +783,7 @@ export function AdminCoursesPage() {
     try {
       if ((section === 'courses' || section === 'podcasts') && activeLessonForm && (activeLessonForm.title.trim() || activeLessonForm.videoUrl.trim() || activeLessonForm.audioPath.trim())) {
         setSaving(false)
-        setLessonFormError(`Clique em "Adicionar ${section === 'podcasts' ? 'episódio' : 'aula'}" para confirmar antes de salvar.`)
+        setLessonFormError(`Clique em "Adicionar ${section === 'podcasts' ? 'episódio' : 'aula'}" para confirmar antes de guardar.`)
         return
       }
       if (section === 'courses' && draft.status === 'published' && draft.lessons.length === 0) {
@@ -791,7 +791,7 @@ export function AdminCoursesPage() {
       }
       const finalPublishedAt = (status: Course['status'], existing: Course | undefined) =>
         status === 'published' ? (existing?.published_at ?? new Date().toISOString()) : null
-      if (draft.status === 'scheduled' && !draft.scheduledFor) throw new Error('Informe uma data de agendamento antes de salvar.')
+      if (draft.status === 'scheduled' && !draft.scheduledFor) throw new Error('Informe uma data de agendamento antes de guardar.')
       const scheduledFor = draft.status === 'scheduled' ? new Date(draft.scheduledFor).toISOString() : null
       let coverUrl = draft.coverUrl.trim()
       if (draft.file) {
@@ -808,7 +808,7 @@ export function AdminCoursesPage() {
         }
       }
       const finalAudioPath = draft.audioPath.trim()
-      if (!coverUrl && section !== 'interviews') throw new Error(`Adicione uma capa à ${sectionMeta[section]?.item ?? 'publicação'} antes de salvar.`)
+      if (!coverUrl && section !== 'interviews') throw new Error(`Adicione uma capa à ${sectionMeta[section]?.item ?? 'publicação'} antes de guardar.`)
       const slug = slugify(draft.title)
       if (!slug) throw new Error(`Informe um título válido para gerar o endereço da ${sectionMeta[section]?.item ?? 'publicação'}.`)
       const existing = courses.find(course => course.id === editingId)
@@ -819,7 +819,9 @@ export function AdminCoursesPage() {
         const result = editingId ? await adminSupabase.from('interviews').update(vals).eq('id', editingId) : await adminSupabase.from('interviews').insert(vals)
         if (result.error) throw result.error
       } else if (section === 'blog') {
-        const vals = { slug, title: draft.title.trim(), excerpt: draft.description.trim(), category: draft.articleCategory, read_time: draft.durationText.trim() || null, image_url: coverUrl || null, content: draft.body.trim() || null, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
+        const wordCount = draft.body.trim().split(/\s+/).filter(Boolean).length
+        const autoReadTime = `${Math.max(1, Math.round(wordCount / 200))} min de leitura`
+        const vals = { slug, title: draft.title.trim(), excerpt: draft.description.trim(), category: draft.articleCategory, read_time: draft.durationText.trim() || autoReadTime, image_url: coverUrl || null, author: draft.blogAuthor.trim() || null, content: draft.body.trim() || null, status: draft.status, published_at: finalPublishedAt(draft.status, existing), scheduled_for: scheduledFor }
         const result = editingId ? await adminSupabase.from('articles').update(vals).eq('id', editingId) : await adminSupabase.from('articles').insert(vals)
         if (result.error) throw result.error
       } else if (section === 'zoom') {
@@ -885,11 +887,11 @@ export function AdminCoursesPage() {
       setView('list')
       setNotice(successMsg)
       await loadDashboard()
-      // Remoção de áudios antigos em segundo plano, sem bloquear nem expor erros ao usuário.
+      // Remoção de áudios antigos em segundo plano, sem bloquear nem expor erros ao utilizador.
       for (const audioPath of queuedDeletions) void deleteHostedAudioSilently(audioPath)
       for (const audioPath of queuedLessonAudioDeletions) void deleteHostedAudioSilently(audioPath)
     } catch (caught) {
-      console.error('Falha ao salvar conteúdo no painel administrativo:', caught)
+      console.error('Falha ao guardar conteúdo no painel administrativo:', caught)
       setError(errorMessage(caught))
     } finally { setSaving(false) }
   }
@@ -903,14 +905,16 @@ export function AdminCoursesPage() {
       loadedLessons = ((data ?? []) as LessonRow[]).map(l => ({ id: l.id, title: l.title, videoUrl: l.video_url ?? '', audioPath: l.audio_path ?? '', durationSeconds: l.duration_seconds, position: l.position, coverUrl: l.cover_url ?? '' }))
     }
     let articleCategory = 'Mentalidade'
+    let blogAuthor = ''
     if (adminSupabase && course.category === 'blog') {
-      const { data } = await adminSupabase.from('articles').select('content,category').eq('id', course.id).maybeSingle()
+      const { data } = await adminSupabase.from('articles').select('content,category,author').eq('id', course.id).maybeSingle()
       articleBody = data?.content ?? ''
       articleCategory = data?.category ?? 'Mentalidade'
+      blogAuthor = data?.author ?? ''
     } else if (course.category === 'podcast' && course.body) {
       articleCategory = course.body
     }
-    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', position: course.position?.toString() ?? '', coverUrl: course.cover_url, file: null, audioFile: null, audioPath: course.audio_path ?? '', notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], removedLessonAudioPaths: [], articleCategory, interviewAuthor: course.interview_author ?? '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
+    setDraft({ title: course.title, description: course.description, instructor: course.instructor, category: section === 'courses' ? 'miniseries' : course.category, videoUrl: course.video_url ?? '', body: articleBody, status: course.status, scheduledFor: course.scheduled_for ? new Date(course.scheduled_for).toISOString().slice(0, 16) : '', position: course.position?.toString() ?? '', coverUrl: course.cover_url, file: null, audioFile: null, audioPath: course.audio_path ?? '', notesEnabled: course.notes_enabled ?? true, lessonCount: course.lesson_count?.toString() ?? '', durationText: course.duration_text ?? '', level: course.level ?? null, lessons: loadedLessons, removedLessonIds: [], removedLessonAudioPaths: [], articleCategory, blogAuthor, interviewAuthor: course.interview_author ?? '', zoomType: course.zoom_type ?? 'Aula', zoomCategory: course.zoom_category ?? '' })
     setPreviewUrl(cardCover(course.cover_url || areaImage[course.slug]))
     setActiveLessonForm(null)
     setLessonFormError('')
@@ -938,11 +942,11 @@ export function AdminCoursesPage() {
     setDeleteCourseLoading(false)
     setDeleteCourseConfirm(null)
     if (deleteError) {
-      setError('Não foi possível excluir o conteúdo.')
+      setError('Não foi possível eliminar o conteúdo.')
     } else {
-      setNotice(`${title} foi excluído.`)
+      setNotice(`${title} foi eliminado.`)
       await loadDashboard()
-      // Remoção dos áudios em segundo plano, sem bloquear nem expor erros ao usuário.
+      // Remoção dos áudios em segundo plano, sem bloquear nem expor erros ao utilizador.
       if (audioPath) void deleteHostedAudioSilently(audioPath)
       for (const ep of episodeAudioPaths) void deleteHostedAudioSilently(ep)
     }
@@ -1066,16 +1070,16 @@ export function AdminCoursesPage() {
     {(error || (notice && view !== 'form')) && createPortal(<AdminFeedback type={error ? 'error' : 'success'} message={error || notice} onClose={() => error ? setError('') : setNotice('')}/>, document.body)}
     {section === 'overview' && <>
     <section className="admin-stats" aria-label="Indicadores da Academia">
-      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Alunos cadastrados</span><span className="admin-stat-icon"><Users size={16}/></span></div><strong>{loading ? '—' : stats.students.toLocaleString('pt-BR')}</strong><small>+{stats.newStudents} este mês</small><div className="admin-stat-spark"><Sparkline data={monthlyStudents.length ? monthlyStudents : [0,0,0,0,0,0]}/></div></article>
-      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Novos este mês</span><span className="admin-stat-icon"><CalendarDays size={16}/></span></div><strong>{loading ? '—' : stats.newStudents.toLocaleString('pt-BR')}</strong><small>Contas criadas neste mês</small><div className="admin-stat-spark"><Sparkline data={monthlyStudents.length ? monthlyStudents : [0,0,0,0,0,0]}/></div></article>
-      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Cursos publicados</span><span className="admin-stat-icon"><BookOpen size={16}/></span></div><strong>{loading ? '—' : stats.publishedCourses.toLocaleString('pt-BR')}</strong><small>Disponíveis na biblioteca</small><div className="admin-stat-spark"><Sparkline data={monthlyCourses.some(v => v > 0) ? monthlyCourses : [0,0,0,0,0,0]}/></div></article>
-      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Acessos este mês</span><span className="admin-stat-icon"><Eye size={16}/></span></div><strong>{loading ? '—' : stats.visitsThisMonth.toLocaleString('pt-BR')}</strong><small>Visitas aos cursos</small><div className="admin-stat-spark"><Sparkline data={monthlyVisits.length ? monthlyVisits : [0,0,0,0,0,0]}/></div></article>
+      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Alunos registados</span><span className="admin-stat-icon"><Users size={16}/></span></div><strong>{loading ? '—' : stats.students.toLocaleString('pt-PT')}</strong><small>+{stats.newStudents} este mês</small><div className="admin-stat-spark"><Sparkline data={monthlyStudents.length ? monthlyStudents : [0,0,0,0,0,0]}/></div></article>
+      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Novos este mês</span><span className="admin-stat-icon"><CalendarDays size={16}/></span></div><strong>{loading ? '—' : stats.newStudents.toLocaleString('pt-PT')}</strong><small>Contas criadas neste mês</small><div className="admin-stat-spark"><Sparkline data={monthlyStudents.length ? monthlyStudents : [0,0,0,0,0,0]}/></div></article>
+      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Cursos publicados</span><span className="admin-stat-icon"><BookOpen size={16}/></span></div><strong>{loading ? '—' : stats.publishedCourses.toLocaleString('pt-PT')}</strong><small>Disponíveis na biblioteca</small><div className="admin-stat-spark"><Sparkline data={monthlyCourses.some(v => v > 0) ? monthlyCourses : [0,0,0,0,0,0]}/></div></article>
+      <article className="admin-stat"><div className="admin-stat-head"><span className="admin-stat-label">Acessos este mês</span><span className="admin-stat-icon"><Eye size={16}/></span></div><strong>{loading ? '—' : stats.visitsThisMonth.toLocaleString('pt-PT')}</strong><small>Visitas aos cursos</small><div className="admin-stat-spark"><Sparkline data={monthlyVisits.length ? monthlyVisits : [0,0,0,0,0,0]}/></div></article>
     </section>
     <section className="admin-overview-grid admin-overview-grid--dashboard">
-      <article className="admin-panel admin-chart-panel"><div className="admin-panel-heading"><div><p className="eyebrow">ENGAJAMENTO</p><h2>Acessos aos conteúdos</h2></div><span>Últimos 6 meses</span></div><div className="admin-chart-featured"><span className="admin-chart-featured-value">{loading ? '—' : monthlyVisits.reduce((a, b) => a + b, 0).toLocaleString('pt-BR')}</span><span className="admin-chart-featured-label">acessos totais</span><span className="admin-chart-featured-badge">+{stats.visitsThisMonth} este mês</span></div><div className="admin-chart-area" role="img" aria-label="Acessos aos conteúdos por mês"><AreaChart bars={monthlyBars}/></div><div className="admin-chart-footer"><span><i/> Acessos registrados</span><strong>{stats.visitsThisMonth.toLocaleString('pt-BR')} neste mês</strong></div></article>
+      <article className="admin-panel admin-chart-panel"><div className="admin-panel-heading"><div><p className="eyebrow">ENGAJAMENTO</p><h2>Acessos aos conteúdos</h2></div><span>Últimos 6 meses</span></div><div className="admin-chart-featured"><span className="admin-chart-featured-value">{loading ? '—' : monthlyVisits.reduce((a, b) => a + b, 0).toLocaleString('pt-PT')}</span><span className="admin-chart-featured-label">acessos totais</span><span className="admin-chart-featured-badge">+{stats.visitsThisMonth} este mês</span></div><div className="admin-chart-area" role="img" aria-label="Acessos aos conteúdos por mês"><AreaChart bars={monthlyBars}/></div><div className="admin-chart-footer"><span><i/> Acessos registados</span><strong>{stats.visitsThisMonth.toLocaleString('pt-PT')} neste mês</strong></div></article>
       <article className="admin-panel admin-format-panel"><div className="admin-panel-heading"><div><p className="eyebrow">BIBLIOTECA</p><h2>Conteúdos publicados</h2></div><span>Por formato</span></div><div className="admin-format-summary"><div className="admin-donut" role="img" aria-label={`${publishedMiniseries} minisséries e ${publishedPodcasts} podcasts publicados`} style={{ background: publishedFormatsTotal ? `conic-gradient(#1d7ec7 0% ${miniseriesShare}%, #5aaeff ${miniseriesShare}% 100%)` : '#1b2a39' }}><span><strong>{publishedFormatsTotal}</strong><small>publicados</small></span></div><ul className="admin-format-legend"><li><span className="admin-format-dot miniseries"/><span>Minisséries</span><strong>{publishedMiniseries}</strong></li><li><span className="admin-format-dot podcasts"/><span>Podcasts</span><strong>{publishedPodcasts}</strong></li></ul></div><Link className="admin-format-link" to="/admin?section=courses">Gerir biblioteca <ArrowUpRight size={14}/></Link></article>
     </section>
-    <section className="admin-panel admin-activity-panel"><div className="admin-panel-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>Atividade recente</h2></div><span>Últimos acessos aos cursos</span></div>{courseAccesses.length ? <div className="admin-activity-list">{courseAccesses.map(access => { const accessedCourse = courses.find(course => course.slug === access.course_slug); return <article className="admin-activity-row" key={access.id}><span className="admin-activity-icon"><BookOpen size={16}/></span><span className="admin-activity-copy"><strong>{accessNames[access.user_id] || 'Aluno da Academia'}</strong><small>{accessedCourse?.title || access.course_slug}</small></span><span className="admin-activity-kind">{accessedCourse?.category === 'podcast' ? 'Podcast' : 'Curso'}</span><time>{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(access.accessed_at))}</time></article> })}</div> : <p className="admin-empty-copy">Os acessos aos cursos aparecerão aqui conforme os alunos explorarem a biblioteca.</p>}</section>
+    <section className="admin-panel admin-activity-panel"><div className="admin-panel-heading"><div><p className="eyebrow">ACOMPANHAMENTO</p><h2>Atividade recente</h2></div><span>Últimos acessos aos cursos</span></div>{courseAccesses.length ? <div className="admin-activity-list">{courseAccesses.map(access => { const accessedCourse = courses.find(course => course.slug === access.course_slug); return <article className="admin-activity-row" key={access.id}><span className="admin-activity-icon"><BookOpen size={16}/></span><span className="admin-activity-copy"><strong>{accessNames[access.user_id] || 'Aluno da Academia'}</strong><small>{accessedCourse?.title || access.course_slug}</small></span><span className="admin-activity-kind">{accessedCourse?.category === 'podcast' ? 'Podcast' : 'Curso'}</span><time>{new Intl.DateTimeFormat('pt-PT', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(access.accessed_at))}</time></article> })}</div> : <p className="admin-empty-copy">Os acessos aos cursos aparecerão aqui conforme os alunos explorarem a biblioteca.</p>}</section>
     </>}
     {(section === 'podcasts' || section === 'interviews') && view === 'list' && <AdminPodcastCatalog variant={section === 'interviews' ? 'interview' : 'podcast'} courses={visibleCourses} loading={loading} onCreate={() => { resetForm(); setView('form') }} onEdit={course => { void editCourse(course) }} onDelete={course => { void deleteCourse(course) }}/>}
     {isCatalogSection && section !== 'podcasts' && section !== 'interviews' && view === 'list' && <section className="admin-catalog-view">
@@ -1086,8 +1090,8 @@ export function AdminCoursesPage() {
         <div className="admin-section-stat"><span className="admin-section-stat-icon"><FileText size={24}/></span><span>Rascunhos</span><strong>{visibleCourses.filter(c => c.status === 'draft').length}</strong><Waveform color="silver"/></div>
       </div>
       <div className="admin-filter-bar">
-        <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={`Buscar ${meta.plural} ou autores…`}/></label>
-        <AdminSelect className="admin-filter-select" ariaLabel="Filtrar por status" value={statusFilter} onChange={value => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'Todos os status' }, { value: 'published', label: 'Publicados' }, { value: 'scheduled', label: 'Agendados' }, { value: 'draft', label: 'Rascunhos' }]}/>
+        <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={`Pesquisar ${meta.plural} ou autores…`}/></label>
+        <AdminSelect className="admin-filter-select" ariaLabel="Filtrar por estado" value={statusFilter} onChange={value => setStatusFilter(value as typeof statusFilter)} options={[{ value: 'all', label: 'Todos os estados' }, { value: 'published', label: 'Publicados' }, { value: 'scheduled', label: 'Agendados' }, { value: 'draft', label: 'Rascunhos' }]}/>
         {uniqueAuthors.length > 0 && <AdminSelect className="admin-filter-select" ariaLabel="Filtrar por autor" value={authorFilter} onChange={setAuthorFilter} options={[{ value: '', label: 'Todos os autores' }, ...uniqueAuthors.map(a => ({ value: a, label: a, avatar: getProfessorPhoto(a) ? img(getProfessorPhoto(a)!) : undefined }))]}/>}
         <AdminSelect className="admin-filter-select" ariaLabel="Ordenar catálogo" value={sortOrder} onChange={value => setSortOrder(value as typeof sortOrder)} options={[{ value: 'newest', label: 'Mais recentes' }, { value: 'oldest', label: 'Mais antigos' }]}/>
         {(searchQuery || statusFilter !== 'all' || authorFilter || sortOrder !== 'newest') && <button className="admin-clear-filters" type="button" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setAuthorFilter(''); setSortOrder('newest') }}>Limpar filtros</button>}
@@ -1097,7 +1101,7 @@ export function AdminCoursesPage() {
         <span className="admin-catalog-count">{loading ? '…' : `${filteredCourses.length} ${filteredCourses.length === 1 ? meta.item : meta.plural} encontrado${filteredCourses.length === 1 ? '' : 's'}`}</span>
       </div>
       {loading
-        ? <div className="admin-list-loading"><LoaderCircle className="admin-spinner" size={19}/>Carregando conteúdos…</div>
+        ? <div className="admin-list-loading"><LoaderCircle className="admin-spinner" size={19}/>A carregar conteúdos…</div>
         : filteredCourses.length
           ? <div className="admin-course-grid">{filteredCourses.map(course => {
                 const publicUrl = section === 'blog' ? `/blog/${course.slug}` : `/assistir/${course.slug}`
@@ -1116,7 +1120,7 @@ export function AdminCoursesPage() {
                   <div className="admin-course-row-actions">
                     <Link to={publicUrl} className="admin-icon-button" title="Ver página" onClick={e => e.stopPropagation()}><Eye size={15}/></Link>
                     <button type="button" className="admin-icon-button" onClick={e => { e.stopPropagation(); void editCourse(course) }} title="Editar"><Pencil size={15}/></button>
-                    <button type="button" className="admin-icon-button admin-icon-button--danger" onClick={e => { e.stopPropagation(); deleteCourse(course) }} title="Excluir"><Trash2 size={15}/></button>
+                    <button type="button" className="admin-icon-button admin-icon-button--danger" onClick={e => { e.stopPropagation(); deleteCourse(course) }} title="Eliminar"><Trash2 size={15}/></button>
                   </div>
                 </article>
               })}</div>
@@ -1138,7 +1142,7 @@ export function AdminCoursesPage() {
           {/* Seção 1 — Informações básicas */}
           <div className="admin-form-card">
             <div className="admin-form-section-head">
-              <div className="admin-form-section-left"><span className="admin-form-step">1</span><div><strong>Informações básicas</strong><span>Defina os dados principais do seu {meta.item}.</span></div></div>
+              <div className="admin-form-section-left"><span className="admin-form-step">1</span><div><strong>Informações básicas</strong><span>Defina os dados principais do/da {meta.item}.</span></div></div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="admin-form-section-info"><Info size={13}/> Essas informações serão exibidas na biblioteca.</span>
                 {section === 'blog' && <button type="button" className="admin-ai-btn--hero" onClick={() => setAiGenerateOpen(true)}><Sparkles size={14}/> Gerar com IA</button>}
@@ -1168,6 +1172,9 @@ export function AdminCoursesPage() {
                 </div>
                 <label className="admin-field" style={{ marginTop: 0 }}><span>Tempo de leitura</span><input value={draft.durationText} onChange={e => setDraft(c => ({ ...c, durationText: e.target.value }))} placeholder="Ex.: 5 min de leitura" maxLength={40}/></label>
               </div>
+            )}
+            {section === 'blog' && (
+              <div className="admin-field"><span>Autor</span><AdminSelect ariaLabel="Autor do artigo" className="admin-author-select" value={draft.blogAuthor} onChange={v => setDraft(c => ({ ...c, blogAuthor: v }))} options={[{ value: '', label: 'Selecionar autor' }, ...PROFESSOR_OPTIONS]}/></div>
             )}
             {section === 'blog' && (
               <div className="admin-field">
@@ -1213,7 +1220,7 @@ export function AdminCoursesPage() {
                     })
                     .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Não foi possível ordenar as aulas com IA.'))
                     .finally(() => setAiSortLoading(false))
-                }}>{aiSortLoading ? <><LoaderCircle size={13} className="admin-spinner"/> Ordenando…</> : <><Sparkles size={13}/> Ordenar com IA</>}</button>}
+                }}>{aiSortLoading ? <><LoaderCircle size={13} className="admin-spinner"/> A ordenar…</> : <><Sparkles size={13}/> Ordenar com IA</>}</button>}
                 <span className="admin-form-section-info"><Info size={13}/> Número de aulas e duração são calculados automaticamente.</span>
               </div>
             </div>
@@ -1224,7 +1231,7 @@ export function AdminCoursesPage() {
                       <div className="admin-lesson-form">
                         <div className="admin-lesson-form-row">
                           <label className="admin-field"><span>Título {section === 'podcasts' ? 'do episódio' : 'da aula'}</span><input value={activeLessonForm.title} onChange={e => setActiveLessonForm(f => f ? { ...f, title: e.target.value } : f)} placeholder={section === 'podcasts' ? 'Ex.: Episódio 1 — Introdução' : 'Ex.: Introdução ao módulo'} maxLength={200}/></label>
-                          {section !== 'podcasts' && <label className="admin-field"><span>Link do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>}
+                          {section !== 'podcasts' && <label className="admin-field"><span>Ligação do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>}
                           <label className="admin-field"><span>Duração (ex.: 12:34)</span><div className="admin-input-icon-wrap"><Clock size={14}/><input value={activeLessonForm.durationText} onChange={e => setActiveLessonForm(f => f ? { ...f, durationText: e.target.value } : f)} placeholder="MM:SS ou H:MM:SS" className="admin-input-has-icon"/></div></label>
                         </div>
                         {section === 'podcasts' && (
@@ -1266,7 +1273,7 @@ export function AdminCoursesPage() {
                         {lessonFormError && <p className="admin-lesson-form-error">{lessonFormError}</p>}
                         <div className="admin-lesson-form-actions">
                           <button type="button" className="admin-lesson-cancel-btn" onClick={cancelLessonForm}>Cancelar</button>
-                          <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving || lessonAudioUploading}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Salvar alterações</button>
+                          <button type="button" className="admin-lesson-confirm-btn" onClick={() => void confirmLessonForm()} disabled={lessonSaving || lessonAudioUploading}>{lessonSaving ? <LoaderCircle size={13} className="admin-spinner"/> : <Check size={14}/>} Guardar alterações</button>
                         </div>
                       </div>
                     </div>
@@ -1292,7 +1299,7 @@ export function AdminCoursesPage() {
             {activeLessonForm?.isNew && <div className="admin-lesson-form">
               <div className="admin-lesson-form-row">
                 <label className="admin-field"><span>Título {section === 'podcasts' ? 'do episódio' : 'da aula'}</span><input value={activeLessonForm.title} onChange={e => setActiveLessonForm(f => f ? { ...f, title: e.target.value } : f)} placeholder={section === 'podcasts' ? 'Ex.: Episódio 1 — Introdução' : 'Ex.: Introdução ao módulo'} maxLength={200}/></label>
-                {section !== 'podcasts' && <label className="admin-field"><span>Link do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>}
+                {section !== 'podcasts' && <label className="admin-field"><span>Ligação do YouTube</span><div className="admin-input-icon-wrap"><Link2 size={14}/><input type="url" value={activeLessonForm.videoUrl} onChange={e => setLessonVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=…" className="admin-input-has-icon"/></div></label>}
                 <label className="admin-field"><span>Duração (ex.: 12:34)</span><div className="admin-input-icon-wrap"><Clock size={14}/><input value={activeLessonForm.durationText} onChange={e => setActiveLessonForm(f => f ? { ...f, durationText: e.target.value } : f)} placeholder="MM:SS ou H:MM:SS" className="admin-input-has-icon"/></div></label>
               </div>
               {section === 'podcasts' && (
@@ -1340,14 +1347,14 @@ export function AdminCoursesPage() {
             {!activeLessonForm && !playlistImportOpen && (
               <div className="admin-lesson-add-row">
                 <button type="button" className="admin-add-lesson-btn" onClick={addNewLesson}><Plus size={14}/> Adicionar {section === 'podcasts' ? 'episódio' : 'aula'}</button>
-                {section !== 'podcasts' && <button type="button" className="admin-import-playlist-btn" onClick={openPlaylistImport}><ListVideo size={14}/> Importar playlist</button>}
+                {section !== 'podcasts' && <button type="button" className="admin-import-playlist-btn" onClick={openPlaylistImport}><ListVideo size={14}/> Importar lista de reprodução</button>}
               </div>
             )}
             {playlistImportOpen && (
               <div className="admin-playlist-import">
                 <div className="admin-playlist-import-header">
                   <ListVideo size={15}/>
-                  <strong>Importar playlist do YouTube</strong>
+                  <strong>Importar lista de reprodução do YouTube</strong>
                   <button type="button" className="admin-playlist-import-close" onClick={closePlaylistImport}><X size={14}/></button>
                 </div>
                 <div className="admin-playlist-url-row">
@@ -1360,7 +1367,7 @@ export function AdminCoursesPage() {
                     onKeyDown={e => e.key === 'Enter' && void fetchPlaylist()}
                   />
                   <button type="button" className="admin-playlist-fetch-btn" onClick={() => void fetchPlaylist()} disabled={!playlistUrl.trim() || playlistFetching}>
-                    {playlistFetching ? <LoaderCircle size={13} className="admin-spinner"/> : <Search size={13}/>} Buscar
+                    {playlistFetching ? <LoaderCircle size={13} className="admin-spinner"/> : <Search size={13}/>} Pesquisar
                   </button>
                 </div>
                 {playlistError && <p className="admin-playlist-error">{playlistError}</p>}
@@ -1415,7 +1422,7 @@ export function AdminCoursesPage() {
               <div className="admin-form-config-left">
                 {section === 'courses' && <label className="admin-field"><span>Nível</span><AdminSelect className="admin-field-select" ariaLabel="Nível" value={draft.level ?? ''} onChange={value => setDraft(c => ({ ...c, level: (value || null) as Course['level'] }))} options={[{ value: '', label: 'Sem nível definido' }, { value: 'Iniciante', label: 'Iniciante' }, { value: 'Intermédio', label: 'Intermédio' }, { value: 'Avançado', label: 'Avançado' }]}/></label>}
                 {section === 'courses' && <label className="admin-field"><span>Posição na biblioteca</span><div className="admin-input-icon-wrap"><Hash size={14}/><input type="number" min="1" value={draft.position} onChange={e => setDraft(c => ({ ...c, position: e.target.value }))} placeholder="Ex.: 1, 2, 3…" className="admin-input-has-icon"/></div></label>}
-                {section === 'courses' && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Habilitar opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
+                {section === 'courses' && <label className="admin-field admin-field--checkbox"><input type="checkbox" checked={draft.notesEnabled} onChange={e => setDraft(c => ({ ...c, notesEnabled: e.target.checked }))}/><div className="admin-checkbox-copy"><span>Ativar a opção de notas</span><small>Permite que os alunos façam anotações durante a {meta.item}.</small></div></label>}
               </div>
               <div className="admin-form-config-right">
                 <div className="admin-field"><span>Capa</span>
@@ -1435,7 +1442,7 @@ export function AdminCoursesPage() {
               {draft.status === 'scheduled' && <input type="datetime-local" className="admin-scheduled-input" value={draft.scheduledFor} onChange={e => setDraft(c => ({ ...c, scheduledFor: e.target.value }))} required/>}
             </div>
             <button className="button admin-save-btn-new" type="submit" disabled={saving}>
-              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>Salvando…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Salvar alterações' : 'Salvar rascunho'}</>}
+              {saving ? <><LoaderCircle className="admin-spinner" size={17}/>A guardar…</> : draft.status === 'published' ? <><Save size={16}/> Publicar {meta.item}</> : draft.status === 'scheduled' ? <><CalendarDays size={16}/> Agendar {meta.item}</> : <><Save size={16}/> {editingId ? 'Guardar alterações' : 'Guardar rascunho'}</>}
             </button>
           </div>
         </div>
@@ -1445,10 +1452,10 @@ export function AdminCoursesPage() {
           <div className="admin-form-sidebar-card">
             <div className="admin-sidebar-card-head">
               <span className="admin-sidebar-card-icon"><ImagePlus size={15}/></span>
-              <div><strong>Pré-visualização da capa</strong><span>Veja como a capa da sua {meta.item} será exibida na biblioteca.</span></div>
+              <div><strong>Pré-visualização da capa</strong><span>Veja como a capa da {meta.item} será exibida na biblioteca.</span></div>
             </div>
             <div className="admin-cover-preview">
-              {previewUrl ? <img src={previewUrl} alt=""/> : <div className="admin-cover-preview-empty"><ImagePlus size={26}/><strong>Sua capa aparecerá aqui</strong><span>Após o upload da imagem</span></div>}
+              {previewUrl ? <img src={previewUrl} alt=""/> : <div className="admin-cover-preview-empty"><ImagePlus size={26}/><strong>A sua capa será apresentada aqui</strong><span>Após carregar a imagem</span></div>}
             </div>
           </div>
           {/* Resumo de publicação */}
@@ -1495,7 +1502,7 @@ export function AdminCoursesPage() {
           {categoryError && <p className="admin-category-modal-error" role="alert">{categoryError}</p>}
           <label className="admin-field"><span>Nome da categoria</span><input autoFocus value={newCategoryName} onChange={event => { setNewCategoryName(event.target.value); setCategoryError('') }} placeholder="Ex.: Liderança" maxLength={40} required/></label>
           <label className="admin-field admin-category-color-field"><span>Cor do marcador</span><span className="admin-category-color-control"><input type="color" value={newCategoryColor} onChange={event => setNewCategoryColor(event.target.value)} aria-label="Cor do marcador"/><code>{newCategoryColor.toUpperCase()}</code></span></label>
-          <div className="admin-category-modal-actions"><button type="button" className="admin-lesson-cancel-btn" onClick={() => setCategoryModalOpen(false)}>Cancelar</button><button type="submit" className="admin-ai-generate-btn" disabled={categorySaving || !newCategoryName.trim()}>{categorySaving ? <><LoaderCircle size={14} className="admin-spinner"/> Salvando…</> : <><Plus size={14}/> Criar categoria</>}</button></div>
+          <div className="admin-category-modal-actions"><button type="button" className="admin-lesson-cancel-btn" onClick={() => setCategoryModalOpen(false)}>Cancelar</button><button type="submit" className="admin-ai-generate-btn" disabled={categorySaving || !newCategoryName.trim()}>{categorySaving ? <><LoaderCircle size={14} className="admin-spinner"/> A guardar…</> : <><Plus size={14}/> Criar categoria</>}</button></div>
         </form>
       </div>,
       document.body
@@ -1508,7 +1515,7 @@ export function AdminCoursesPage() {
             <span className="admin-ai-modal-icon"><Sparkles size={18}/></span>
             <div>
               <h2 className="admin-ai-modal-title">Gerar artigo com IA</h2>
-              <p className="admin-ai-modal-subtitle">Preencha os campos e a IA escreverá um artigo completo para você.</p>
+              <p className="admin-ai-modal-subtitle">Preencha os campos e a IA escreverá um artigo completo para si.</p>
             </div>
           </div>
           {aiError && <p className="admin-ai-error">{aiError}</p>}
@@ -1554,32 +1561,32 @@ export function AdminCoursesPage() {
     )}
     {section === 'students' && <>
       <div className="admin-section-stats">
-        <div className="admin-section-stat"><span className="admin-section-stat-icon"><Users size={24}/></span><span>Total de alunos</span><strong>{loading ? '—' : stats.students.toLocaleString('pt-BR')}</strong><Waveform/></div>
-        <div className="admin-section-stat"><span className="admin-section-stat-icon"><CalendarDays size={24}/></span><span>Novos este mês</span><strong className="published">{loading ? '—' : stats.newStudents.toLocaleString('pt-BR')}</strong><Waveform color="green"/></div>
+        <div className="admin-section-stat"><span className="admin-section-stat-icon"><Users size={24}/></span><span>Total de alunos</span><strong>{loading ? '—' : stats.students.toLocaleString('pt-PT')}</strong><Waveform/></div>
+        <div className="admin-section-stat"><span className="admin-section-stat-icon"><CalendarDays size={24}/></span><span>Novos este mês</span><strong className="published">{loading ? '—' : stats.newStudents.toLocaleString('pt-PT')}</strong><Waveform color="green"/></div>
       </div>
       <div className="admin-filter-bar" style={{ marginBottom: 0 }}>
-        <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Buscar por nome ou e-mail…"/></label>
+        <label className="admin-search-wrap"><Search size={15}/><input className="admin-search-input" value={studentSearch} onChange={e => setStudentSearch(e.target.value)} placeholder="Pesquisar por nome ou e-mail…"/></label>
         <button className="button admin-create-btn" type="button" onClick={() => { setCreateOpen(true); setCreateError(''); setCreateSuccess('') }}><Plus size={16}/> Criar aluno</button>
         <button className="button admin-create-btn" type="button" style={{ background: 'transparent', border: '1px solid #1e3a52', color: '#7ab3d4' }} onClick={() => { setInviteOpen(true); setInviteError(''); setInviteSuccess('') }}><Mail size={15}/> Convidar por e-mail</button>
       </div>
       <div className="admin-panel" style={{ marginTop: 16 }}>
-        <div className="admin-panel-heading"><div><p className="eyebrow">CADASTROS</p><h2>Alunos</h2></div><span>{loading ? '…' : `${students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).length} encontrado(s)`}</span></div>
+        <div className="admin-panel-heading"><div><p className="eyebrow">REGISTOS</p><h2>Alunos</h2></div><span>{loading ? '…' : `${students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).length} encontrado(s)`}</span></div>
         {loading
-          ? <div className="admin-list-loading"><LoaderCircle className="admin-spinner" size={19}/>Carregando alunos…</div>
+          ? <div className="admin-list-loading"><LoaderCircle className="admin-spinner" size={19}/>A carregar alunos…</div>
           : <div className="admin-students-table">
               <div className="admin-students-head">
                 <span>Nome</span>
                 <span>E-mail</span>
-                <span>Cadastro</span>
+                <span>Registo</span>
                 <span/>
               </div>
               {students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).length === 0
-                ? <div className="admin-courses-empty"><Users size={28}/><strong>Nenhum aluno encontrado</strong><span>{studentSearch ? 'Nenhum resultado para essa busca.' : 'Os alunos cadastrados aparecerão aqui.'}</span></div>
+                ? <div className="admin-courses-empty"><Users size={28}/><strong>Nenhum aluno encontrado</strong><span>{studentSearch ? 'Nenhum resultado para essa pesquisa.' : 'Os alunos registados aparecerão aqui.'}</span></div>
                 : students.filter(s => !studentSearch || s.name.toLowerCase().includes(studentSearch.toLowerCase()) || s.email.toLowerCase().includes(studentSearch.toLowerCase())).map(s => (
                   <div className="admin-students-row" key={s.id}>
                     <span className="admin-students-name"><span className="admin-students-avatar">{(s.name[0] ?? 'A').toUpperCase()}</span>{s.name}</span>
                     <span className="admin-students-email">{s.email || '—'}</span>
-                    <span className="admin-students-date">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' }).format(new Date(s.created_at))}</span>
+                    <span className="admin-students-date">{new Intl.DateTimeFormat('pt-PT', { dateStyle: 'short' }).format(new Date(s.created_at))}</span>
                     <span className="admin-students-actions">
                       <button type="button" className="admin-icon-button admin-icon-button--danger" title="Remover aluno" onClick={() => setDeleteConfirmId(s.id)}><Trash2 size={15}/></button>
                     </span>
@@ -1595,15 +1602,15 @@ export function AdminCoursesPage() {
             <button type="button" className="admin-edit-modal-close" onClick={() => { setCreateOpen(false); setCreateSuccess('') }} aria-label="Fechar"><X size={18}/></button>
             <span className="admin-category-modal-icon"><GraduationCap size={18}/></span>
             <h2 id="admin-create-title">Criar aluno</h2>
-            <p>A conta fica ativa imediatamente. Compartilhe as credenciais com o aluno.</p>
+            <p>A conta fica ativa imediatamente. Partilhe as credenciais com o aluno.</p>
             {createError && <p className="admin-category-modal-error" role="alert">{createError}</p>}
             {createSuccess && <p className="admin-category-modal-success" role="status">{createSuccess}</p>}
             <label className="admin-field"><span>Nome completo</span><input autoFocus value={createName} onChange={e => { setCreateName(e.target.value); setCreateError('') }} placeholder="Ex.: João Silva" maxLength={100}/></label>
             <label className="admin-field"><span>E-mail <span className="admin-ai-required">*</span></span><input type="email" value={createEmail} onChange={e => { setCreateEmail(e.target.value); setCreateError('') }} placeholder="joao@email.com" required maxLength={200}/></label>
-            <label className="admin-field"><span>Senha <span className="admin-ai-required">*</span></span><input type="password" value={createPassword} onChange={e => { setCreatePassword(e.target.value); setCreateError('') }} placeholder="Mínimo 6 caracteres" required minLength={6} maxLength={100}/></label>
+            <label className="admin-field"><span>Palavra-passe <span className="admin-ai-required">*</span></span><input type="password" value={createPassword} onChange={e => { setCreatePassword(e.target.value); setCreateError('') }} placeholder="Mínimo 6 caracteres" required minLength={6} maxLength={100}/></label>
             <div className="admin-category-modal-actions">
               <button type="button" className="admin-lesson-cancel-btn" onClick={() => { setCreateOpen(false); setCreateSuccess('') }}>Fechar</button>
-              <button type="submit" className="admin-ai-generate-btn" disabled={createLoading || !createEmail.trim() || !createPassword}>{createLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Criando…</> : <><Plus size={14}/> Criar aluno</>}</button>
+              <button type="submit" className="admin-ai-generate-btn" disabled={createLoading || !createEmail.trim() || !createPassword}>{createLoading ? <><LoaderCircle size={14} className="admin-spinner"/> A criar…</> : <><Plus size={14}/> Criar aluno</>}</button>
             </div>
           </form>
         </div>,
@@ -1615,14 +1622,14 @@ export function AdminCoursesPage() {
             <button type="button" className="admin-edit-modal-close" onClick={() => { setInviteOpen(false); setInviteSuccess('') }} aria-label="Fechar"><X size={18}/></button>
             <span className="admin-category-modal-icon"><User size={18}/></span>
             <h2 id="admin-invite-title">Convidar aluno</h2>
-            <p>O aluno receberá um e-mail para criar a senha e acessar a Academia.</p>
+            <p>O aluno receberá um e-mail para criar a palavra-passe e aceder à Academia.</p>
             {inviteError && <p className="admin-category-modal-error" role="alert">{inviteError}</p>}
             {inviteSuccess && <p className="admin-category-modal-success" role="status">{inviteSuccess}</p>}
             <label className="admin-field"><span>Nome completo</span><input autoFocus value={inviteName} onChange={e => { setInviteName(e.target.value); setInviteError('') }} placeholder="Ex.: João Silva" maxLength={100}/></label>
             <label className="admin-field"><span>E-mail <span className="admin-ai-required">*</span></span><input type="email" value={inviteEmail} onChange={e => { setInviteEmail(e.target.value); setInviteError('') }} placeholder="joao@email.com" required maxLength={200}/></label>
             <div className="admin-category-modal-actions">
               <button type="button" className="admin-lesson-cancel-btn" onClick={() => { setInviteOpen(false); setInviteSuccess('') }}>Fechar</button>
-              <button type="submit" className="admin-ai-generate-btn" disabled={inviteLoading || !inviteEmail.trim()}>{inviteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Enviando…</> : <><Plus size={14}/> Enviar convite</>}</button>
+              <button type="submit" className="admin-ai-generate-btn" disabled={inviteLoading || !inviteEmail.trim()}>{inviteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> A enviar…</> : <><Plus size={14}/> Enviar convite</>}</button>
             </div>
           </form>
         </div>,
@@ -1637,7 +1644,7 @@ export function AdminCoursesPage() {
             <p>Esta ação é irreversível. O aluno perderá acesso imediatamente e todos os seus dados serão removidos.</p>
             <div className="admin-category-modal-actions">
               <button type="button" className="admin-lesson-cancel-btn" onClick={() => setDeleteConfirmId(null)}>Cancelar</button>
-              <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} disabled={deleteLoading} onClick={() => void deleteStudent(deleteConfirmId)}>{deleteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Removendo…</> : <><Trash2 size={14}/> Remover aluno</>}</button>
+              <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} disabled={deleteLoading} onClick={() => void deleteStudent(deleteConfirmId)}>{deleteLoading ? <><LoaderCircle size={14} className="admin-spinner"/> A remover…</> : <><Trash2 size={14}/> Remover aluno</>}</button>
             </div>
           </div>
         </div>,
@@ -1649,16 +1656,16 @@ export function AdminCoursesPage() {
         <div className="admin-category-modal">
           <button type="button" className="admin-edit-modal-close" disabled={deleteCourseLoading} onClick={() => setDeleteCourseConfirm(null)} aria-label="Fechar"><X size={18}/></button>
           <span className="admin-category-modal-icon" style={{ background: 'rgba(239,68,68,.12)', color: '#f87171' }}><Trash2 size={18}/></span>
-          <h2 id="admin-delete-course-title">Excluir {meta.item}</h2>
-          <p>Excluir <strong>"{deleteCourseConfirm.title}"</strong>? Deixará de aparecer para os alunos. Esta ação não pode ser desfeita.</p>
+          <h2 id="admin-delete-course-title">Eliminar {meta.item}</h2>
+          <p>Eliminar <strong>"{deleteCourseConfirm.title}"</strong>? Deixará de aparecer para os alunos. Esta ação não pode ser desfeita.</p>
           <div className="admin-category-modal-actions">
             <button type="button" className="admin-lesson-cancel-btn" disabled={deleteCourseLoading} onClick={() => setDeleteCourseConfirm(null)}>Cancelar</button>
-            <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} disabled={deleteCourseLoading} onClick={() => void confirmDeleteCourse()}>{deleteCourseLoading ? <><LoaderCircle size={14} className="admin-spinner"/> Excluindo…</> : <><Trash2 size={14}/> Excluir</>}</button>
+            <button type="button" className="admin-ai-generate-btn" style={{ background: 'rgba(239,68,68,.15)', color: '#f87171', borderColor: 'rgba(239,68,68,.3)' }} disabled={deleteCourseLoading} onClick={() => void confirmDeleteCourse()}>{deleteCourseLoading ? <><LoaderCircle size={14} className="admin-spinner"/> A eliminar…</> : <><Trash2 size={14}/> Eliminar</>}</button>
           </div>
         </div>
       </div>,
       document.body
     )}
-    {!isCatalogSection && section !== 'overview' && section !== 'students' && <section className="admin-panel admin-content-coming"><span className="admin-content-coming-icon"><SectionIcon size={22}/></span><div><p className="eyebrow">SEÇÃO DA ACADEMIA</p><h2>{sectionInfo[section].title}</h2><p>Esta página já está disponível na plataforma. O cadastro para esta seção estará disponível em breve.</p><Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={15}/> Abrir página pública <ArrowUpRight size={14}/></Link></div></section>}
+    {!isCatalogSection && section !== 'overview' && section !== 'students' && <section className="admin-panel admin-content-coming"><span className="admin-content-coming-icon"><SectionIcon size={22}/></span><div><p className="eyebrow">SECÇÃO DA ACADEMIA</p><h2>{sectionInfo[section].title}</h2><p>Esta página já está disponível na plataforma. O registo para esta secção estará disponível em breve.</p><Link className="admin-view-site" to={sectionInfo[section].publicPath ?? '/'}><Eye size={15}/> Abrir página pública <ArrowUpRight size={14}/></Link></div></section>}
   </main></AdminShell>
 }

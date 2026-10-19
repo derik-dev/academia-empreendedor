@@ -49,6 +49,7 @@ describe('blankDraft', () => {
       removedLessonIds: [],
       removedLessonAudioPaths: [],   // ← campo que causou o bug; deve constar aqui
       articleCategory: 'Mentalidade',
+      blogAuthor: '',
       interviewAuthor: '',
       zoomType: 'Aula',
       zoomCategory: '',

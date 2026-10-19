@@ -12,7 +12,7 @@ export function useArticles() {
     if (!supabase) return () => { active = false }
     supabase
       .from('articles')
-      .select('slug,title,excerpt,category,read_time,image_url,published_at')
+      .select('slug,title,excerpt,category,read_time,image_url,author,published_at')
       .eq('status', 'published')
       .order('published_at', { ascending: false })
       .then(({ data }) => {
@@ -25,6 +25,7 @@ export function useArticles() {
           readTime: row.read_time,
           date: formatDate(row.published_at),
           image: articleImage(row.slug, row.image_url),
+          author: row.author ?? undefined,
         })))
         setLoading(false)
       })

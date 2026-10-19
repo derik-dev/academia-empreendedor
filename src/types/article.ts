@@ -6,6 +6,7 @@ export type Article = {
   readTime: string
   date: string
   image: string
+  author?: string
   content?: string
   videoUrl?: string
 }
