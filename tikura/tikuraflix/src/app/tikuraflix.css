@@ -118,6 +118,8 @@ h1, h2, h3, h4 { font-weight: 400; }
 .account-dropdown a:hover, .account-dropdown button:hover { background: rgba(240,207,120,.1); color: var(--gold-light); }
 .brand { font-family: var(--font-display); font-weight: 600; font-size: 1.45rem; letter-spacing: .14em; display: inline-flex; align-items: baseline; gap: 2px; }
 .brand b { font-weight: 600; }
+.brand img { width: clamp(150px, 18vw, 250px); height: auto; }
+@media (max-width: 520px) { .header .brand img { width: clamp(110px, 30vw, 160px); } }
 .brand span { color: var(--text); font-weight: 500; letter-spacing: .14em; }
 .nav { display: flex; align-items: center; gap: clamp(14px, 2.2vw, 34px); }
 .nav a.link { font-size: .95rem; color: var(--muted); letter-spacing: .04em; transition: color .2s; }
@@ -155,6 +157,9 @@ h1, h2, h3, h4 { font-weight: 400; }
   font-family: var(--font-display); font-weight: 400; font-size: .8rem; letter-spacing: .16em; text-transform: uppercase; color: #f7f0e3; }
 .hero-panel i { width: 1px; height: 16px; background: var(--line-strong); }
 .hero-panel-soft { display: inline-flex; align-items: center; gap: 7px; color: #9fc3e8; }
+.hero .btn, .hero .hero-panel, .hero .hero-checks { border: 0; }
+.hero .btn-gold, .hero .btn-gold:hover { box-shadow: none; }
+.hero-panel i { visibility: hidden; }
 .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 26px; }
 .hero-checks { list-style: none; display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 18px; font-size: .9rem; color: var(--muted); }
 .hero-checks li { display: inline-flex; align-items: center; gap: 7px; }
