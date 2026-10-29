@@ -392,6 +392,35 @@ h1, h2, h3, h4 { font-weight: 400; }
 }
 @media (max-width: 400px) { .plan-highlights { flex-wrap: wrap; gap: 16px 0; } .plan-highlights > div { width: 50%; } .plan-highlights > div:nth-child(3) { border-left: 0; } .plan-hotmart { display: none; } }
 
+/* Escala compacta da assinatura em telas maiores. */
+@media (min-width: 861px) {
+  .subscription-section { background-size: min(82%, 1440px) auto; }
+  .subscription-section .plan { min-height: min(44vw, 780px); grid-template-columns: minmax(0, 1fr) minmax(0, 36%); padding: 30px 3vw 32px 5vw; }
+  .subscription-section .plan-card { width: 100%; max-width: 560px; justify-self: end; padding: clamp(22px, 1.8vw, 32px); border-radius: 16px; }
+  .subscription-section .plan-card h2 { font-size: clamp(30px, 3vw, 56px); margin: 9px 0; }
+  .subscription-section .eyebrow { font-size: clamp(10px, .72vw, 13px); }
+  .plan-tagline { font-size: clamp(9px, .72vw, 13px); letter-spacing: .26em; }
+  .plan-ornament { font-size: 23px; margin: 10px 0; }
+  .subscription-section .price { gap: 12px; }
+  .subscription-section .price .big { font-size: clamp(38px, 3.4vw, 64px); }
+  .subscription-section .price small { font-size: clamp(10px, .8vw, 14px); }
+  .subscription-section .checklist { gap: 9px; margin: 14px 0 20px; }
+  .subscription-section .checklist li { font-size: clamp(11px, .77vw, 14px); gap: 12px; }
+  .subscription-section .checklist svg { width: 21px; height: 21px; padding: 3px; }
+  .subscription-section .plan-card > .btn { min-height: 58px; padding: 10px; gap: 14px; font-size: clamp(15px, 1.1vw, 21px); }
+  .subscription-section .plan-card > .btn svg { width: 21px; height: 21px; }
+  .plan-payment { gap: 10px; margin-top: 15px; }
+  .plan-payment p { font-size: clamp(10px, .68vw, 12px); }
+  .plan-hotmart { font-size: 13px; }
+  .plan-hotmart > span { font-size: 21px; }
+  .plan-highlights > div { gap: 10px; padding: 0 clamp(10px, 1.1vw, 20px); }
+  .plan-highlights svg { width: 27px; height: 27px; }
+  .plan-highlights strong { font-size: 14px; }
+  .plan-highlights > div:nth-child(-n+2) strong { font-size: 24px; }
+  .plan-highlights span { font-size: 10px; }
+  .plan-topics { font-size: clamp(9px, .63vw, 12px); }
+}
+
 /* ---------- faq ---------- */
 .faq { max-width: calc(860px + 2 * var(--pad)); margin: 0 auto; padding: 0 var(--pad); display: grid; gap: 10px; }
 .faq details { border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.025); }
