@@ -81,7 +81,7 @@ export default async function Home() {
         </div>
 
         <div id="acervo">
-          {shelves.map((s, idx) => (
+          {shelves.map((s, idx) => s.style === "top10" ? null : (
             <Fragment key={s.id}>
               {s.title === PATHS.taro.label && (
                 <section className="section" id="caminhos" aria-labelledby="caminhos-title">
@@ -124,6 +124,21 @@ export default async function Home() {
             </div>
           </div>
         </Reveal>
+
+        {shelves.map((s, idx) => s.style === "top10" ? (
+          <Shelf
+            key={s.id}
+            id={`fileira-${s.id}`}
+            title={s.title}
+            subtitle={s.subtitle}
+            style={s.style}
+            items={s.courses.map(toCard)}
+            lockedIds={lockedIds}
+            favIds={favIds}
+            loggedIn={!!user}
+            priority={idx < 2}
+          />
+        ) : null)}
 
         <section className="section subscription-section" id="assinatura">
           <Reveal className="plan">
