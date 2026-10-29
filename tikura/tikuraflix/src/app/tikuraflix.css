@@ -291,7 +291,7 @@ h1, h2, h3, h4 { font-weight: 400; }
   background: radial-gradient(60% 70% at 25% 50%, rgba(201,139,39,.12), transparent 70%), linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 18%, var(--bg-2) 82%, var(--bg) 100%); }
 
 /* ---------- banda da Vanessa ---------- */
-.brand-band { position: relative; min-height: min(110vh, 980px); display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
+.brand-band { position: relative; min-height: min(135vh, 1200px); display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
 .brand-band::before { content: ""; position: absolute; inset: 0; z-index: -2; background: url(/brand/cosmos.webp) 60% center / cover no-repeat; }
 .brand-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8,5,10,.95) 0%, rgba(8,5,10,.8) 34%, rgba(8,5,10,.1) 70%); }
 .brand-copy { width: 100%; padding: clamp(110px, 12vw, 160px) var(--pad) clamp(110px, 12vw, 160px) var(--gutter); max-width: calc(600px + var(--gutter) + var(--pad)); }
