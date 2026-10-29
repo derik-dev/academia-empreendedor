@@ -118,9 +118,9 @@ export default async function Home() {
             <p>Benzedeira, doula, terapeuta holística e oraculista. Há mais de {settings.years_count} anos ela transforma saberes ancestrais em caminhos práticos para quem quer cuidar de si e dos outros.</p>
             <p>No Tikuraflix, cada imersão é uma porta de entrada: você aprende no seu tempo, revê quando quiser e segue no seu caminho com apoio.</p>
             <div className="brand-facts">
-              <div><strong className="gold-text">+{settings.students_count}</strong><span>alunos</span></div>
-              <div><strong className="gold-text">{settings.years_count}+</strong><span>anos de caminhada</span></div>
-              <div><strong className="gold-text">{n.imersoes}</strong><span>títulos no acervo</span></div>
+              <div><strong className="gold-text">+{settings.students_count}</strong><span>Alunos</span></div>
+              <div><strong className="gold-text">{settings.years_count}+</strong><span>Anos de caminhada</span></div>
+              <div><strong className="gold-text">{n.imersoes}</strong><span>Títulos no acervo</span></div>
             </div>
           </div>
         </Reveal>
