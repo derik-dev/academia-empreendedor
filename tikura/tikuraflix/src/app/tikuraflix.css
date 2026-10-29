@@ -661,3 +661,16 @@ main, main section, main .section, main .brand-band, main .shelf {
 @media (min-width: 861px) {
   .brand-band::before { background-size: cover; }
 }
+
+/* Segundo cenário: somente o trecho final da imagem, à direita. */
+#assinatura::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 55%;
+  z-index: -1;
+  pointer-events: none;
+  background: url(/brand/assinatura-direita.jpg) right center / auto 100% no-repeat;
+  opacity: .25;
+  mask-image: linear-gradient(90deg, transparent, #000 45%);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%);
+}
