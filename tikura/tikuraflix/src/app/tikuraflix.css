@@ -680,3 +680,26 @@ main, main section, main .section, main .brand-band, main .shelf {
 .brand-facts div span { font-size: 1.05rem; }
 @media (max-width: 860px) { .brand-copy p { max-width: 100%; } }
 
+/* Encontro suave entre os dois cenários, sem intervalo entre as seções. */
+.brand-band::before {
+  mask-image: linear-gradient(180deg, #000 calc(100% - 64px), transparent);
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 64px), transparent);
+}
+#assinatura {
+  margin-top: 0;
+  background-image: linear-gradient(180deg, var(--bg), transparent 64px), url(/brand/bg3.jpg);
+  background-size: 100% 100%, 92% auto;
+  background-position: left top, left center;
+}
+#assinatura::after {
+  mask-image: linear-gradient(90deg, transparent, #000 45%), linear-gradient(180deg, transparent, #000 64px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%), linear-gradient(180deg, transparent, #000 64px);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+@media (min-width: 861px) {
+  #assinatura { background-size: 100% 100%, min(82%, 1440px) auto; background-position: left top, left calc(50% - 48px); }
+}
+@media (max-width: 860px) {
+  #assinatura { background-size: 100% 100%, 100% auto; background-position: left top, left -20px; }
+}
