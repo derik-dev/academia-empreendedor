@@ -413,11 +413,11 @@ h1, h2, h3, h4 { font-weight: 400; }
   .plan-payment p { font-size: clamp(10px, .68vw, 12px); }
   .plan-hotmart { font-size: 13px; }
   .plan-hotmart > span { font-size: 21px; }
-  .plan-highlights > div { gap: 10px; padding: 0 clamp(10px, 1.1vw, 20px); }
-  .plan-highlights svg { width: 27px; height: 27px; }
-  .plan-highlights strong { font-size: 14px; }
-  .plan-highlights > div:nth-child(-n+2) strong { font-size: 24px; }
-  .plan-highlights span { font-size: 10px; }
+  .plan-highlights > div { gap: 14px; padding: 0 clamp(12px, 1.3vw, 24px); }
+  .plan-highlights svg { width: 36px; height: 36px; }
+  .plan-highlights strong { font-size: 18px; }
+  .plan-highlights > div:nth-child(-n+2) strong { font-size: 32px; }
+  .plan-highlights span { font-size: 12px; }
   .plan-topics { font-size: clamp(9px, .63vw, 12px); }
 }
 
