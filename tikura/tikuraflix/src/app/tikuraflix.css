@@ -17,7 +17,7 @@
   --danger: #ff7a7a;
   --wrap: 1280px;
   --pad: clamp(20px, 5vw, 72px);
-  --header-height: 110px;
+  --header-height: 132px;
   /* margem lateral que alinha tudo numa coluna central de até 1280px */
   --gutter: max(var(--pad), calc((100vw - var(--wrap)) / 2));
   --font-display: var(--font-cinzel), "Cinzel", Georgia, serif;
@@ -118,8 +118,8 @@ h1, h2, h3, h4 { font-weight: 400; }
 .account-dropdown a:hover, .account-dropdown button:hover { background: rgba(240,207,120,.1); color: var(--gold-light); }
 .brand { font-family: var(--font-display); font-weight: 600; font-size: 1.45rem; letter-spacing: .14em; display: inline-flex; align-items: baseline; gap: 2px; }
 .brand b { font-weight: 600; }
-.brand img { width: clamp(150px, 18vw, 250px); height: auto; }
-@media (max-width: 520px) { .header .brand img { width: clamp(110px, 30vw, 160px); } }
+.brand img { width: clamp(200px, 22vw, 320px); height: auto; }
+@media (max-width: 520px) { .header .brand img { width: clamp(140px, 37vw, 190px); } }
 .brand span { color: var(--text); font-weight: 500; letter-spacing: .14em; }
 .nav { display: flex; align-items: center; gap: clamp(14px, 2.2vw, 34px); }
 .nav a.link { font-size: .95rem; color: var(--muted); letter-spacing: .04em; transition: color .2s; }
@@ -459,3 +459,11 @@ select.in option { background: #1a1115; color: var(--text); }
   .strip span { font-size: .85rem; }
 }
 @media (hover: none) { .card-info { display: none; } }
+
+/* Seções sem contornos ou linhas de separação. */
+main, main section, .section, .brand-band, #acervo, .header, .footer {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+.shelf-divider, .eyebrow::before { display: none; }
