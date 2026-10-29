@@ -435,7 +435,7 @@ h1, h2, h3, h4 { font-weight: 400; }
 }
 
 /* ---------- faq ---------- */
-#duvidas { background: url(/brand/faq-bg4.webp) center bottom / cover no-repeat; }
+#duvidas { background: linear-gradient(rgba(8,5,10,.68), rgba(8,5,10,.68)), url(/brand/faq-bg4.webp) center bottom / cover no-repeat; }
 .faq { max-width: calc(860px + 2 * var(--pad)); margin: 0 auto; padding: 0 var(--pad); display: grid; gap: 10px; }
 .faq details { border: 1px solid var(--line); border-radius: 6px; background: rgba(255,255,255,.025); }
 .faq summary { list-style: none; cursor: pointer; padding: 20px 24px; font-family: var(--font-display); font-size: 1.05rem; letter-spacing: .02em; display: flex; justify-content: space-between; gap: 16px; align-items: center; }
