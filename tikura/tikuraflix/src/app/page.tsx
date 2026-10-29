@@ -136,14 +136,12 @@ export default async function Home() {
               </div>
             </div>
             <div className="plan-card">
+              <div className="plan-heading">
               <span className="eyebrow">Assinatura anual</span>
               <h2 className="display">Todo o acervo <span className="gold-text">por 12 meses</span></h2>
               <p className="plan-tagline">Centenas de horas de conteúdo<br />para a sua jornada espiritual</p>
-              <div className="plan-ornament" aria-hidden="true">✶</div>
-              <div className="price">
-                <span className="big gold-text">R$ {settings.price_cash}</span>
-                <small>à vista · ou {settings.price_installments}</small>
               </div>
+              <div className="plan-ornament" aria-hidden="true">✶</div>
               <ul className="checklist">
                 {[
                   `Acesso completo às ${n.imersoes} imersões e séries já lançadas`,
@@ -158,6 +156,10 @@ export default async function Home() {
                   <li key={t}><IconCheck size={18} /><span>{t}</span></li>
                 ))}
               </ul>
+              <div className="price price-installments">
+                <span className="big gold-text">{settings.price_installments.replace(/\s+de\s+/, " ")}</span>
+                <small>ou R$ {settings.price_cash} à vista</small>
+              </div>
               {user ? (
                 <Link href="/minha-area" className="btn btn-gold">Ir para minha área <IconArrow /></Link>
               ) : (
