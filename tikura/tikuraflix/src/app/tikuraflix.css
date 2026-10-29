@@ -355,6 +355,8 @@ h1, h2, h3, h4 { font-weight: 400; }
 .subscription-section .checklist li { gap: 18px; align-items: center; font-size: clamp(11px, .98vw, 18px); line-height: 1.4; color: #f0eeeb; }
 .subscription-section .checklist svg { width: 25px; height: 25px; border: 1.5px solid var(--gold-light); border-radius: 50%; padding: 4px; margin-top: 0; }
 .subscription-section .plan-card > .btn { width: 100%; justify-content: center; gap: 20px; min-height: clamp(54px, 4.5vw, 82px); padding: 12px; border: 1px solid #ffe4a0; border-radius: 8px; background: linear-gradient(115deg, #f1c75d, #f8dc85 45%, #b7761c); color: #120d06; font-family: var(--font-display); font-size: clamp(16px, 1.5vw, 28px); letter-spacing: .07em; text-transform: uppercase; }
+.subscription-section .plan-card { isolation: isolate; }
+.plan-footer-art { position: absolute; z-index: -1; inset: auto 0 0; height: 165px; border-radius: 0 0 16px 16px; pointer-events: none; background: url(/brand/plan-footer.webp) center bottom / 100% auto no-repeat; opacity: .2; mask-image: linear-gradient(to bottom, transparent, #000 45%); }
 .plan-payment { display: flex; align-items: center; gap: 14px; margin-top: 20px; color: #bdbab8; }
 .plan-payment > svg { flex: none; color: var(--gold-light); }
 .plan-payment p { font-size: clamp(10px, .92vw, 16px); line-height: 1.5; }

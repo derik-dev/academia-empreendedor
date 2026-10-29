@@ -160,6 +160,7 @@ export default async function Home() {
                 <span className="big gold-text">{settings.price_installments.replace(/\s+de\s+/, " ")}</span>
                 <small>ou R$ {settings.price_cash} à vista</small>
               </div>
+              <div className="plan-footer-art" aria-hidden="true" />
               {user ? (
                 <Link href="/minha-area" className="btn btn-gold">Ir para minha área <IconArrow /></Link>
               ) : (
