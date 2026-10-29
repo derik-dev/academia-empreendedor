@@ -277,9 +277,9 @@ h1, h2, h3, h4 { font-weight: 400; }
   background: radial-gradient(60% 70% at 25% 50%, rgba(201,139,39,.12), transparent 70%), linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 18%, var(--bg-2) 82%, var(--bg) 100%); }
 
 /* ---------- banda da Vanessa ---------- */
-.brand-band { position: relative; min-height: min(92vh, 820px); display: flex; align-items: center; margin: 100px 0 0; isolation: isolate; overflow: hidden; }
+.brand-band { position: relative; min-height: min(110vh, 980px); display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
 .brand-band::before { content: ""; position: absolute; inset: 0; z-index: -2; background: url(/brand/cosmos.webp) 60% center / cover no-repeat; }
-.brand-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8,5,10,.95) 0%, rgba(8,5,10,.8) 34%, rgba(8,5,10,.1) 70%), linear-gradient(0deg, var(--bg) 0%, transparent 18%), linear-gradient(180deg, var(--bg) 0%, transparent 18%); }
+.brand-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8,5,10,.95) 0%, rgba(8,5,10,.8) 34%, rgba(8,5,10,.1) 70%); }
 .brand-copy { width: 100%; padding: clamp(110px, 12vw, 160px) var(--pad) clamp(110px, 12vw, 160px) var(--gutter); max-width: calc(600px + var(--gutter) + var(--pad)); }
 .brand-copy h2 { font-size: clamp(1.9rem, 3.8vw, 3.2rem); margin: 14px 0 18px; }
 @media (min-width: 861px) { .brand-copy h2 { white-space: nowrap; } }
@@ -287,7 +287,7 @@ h1, h2, h3, h4 { font-weight: 400; }
 .brand-facts { display: flex; flex-wrap: wrap; gap: 14px 38px; margin-top: 26px; }
 .brand-facts div strong { display: block; font-family: var(--font-display); font-size: 2rem; }
 .brand-facts div span { color: var(--muted); font-size: .95rem; }
-@media (max-width: 860px) { .brand-band::before { background: url(/brand/cosmos-mobile.webp) center top / 100% auto no-repeat; } .brand-band::after { background: linear-gradient(180deg, var(--bg) 0, rgba(8,5,10,0) 14vw, rgba(8,5,10,0) 58vw, var(--bg) 100vw, var(--bg) 100%); } .brand-band { min-height: auto; align-items: flex-end; } .brand-copy { padding-top: 84vw; padding-bottom: 90px; } }
+@media (max-width: 860px) { .brand-band::before { background: url(/brand/cosmos-mobile.webp) center top / 100% auto no-repeat; } .brand-band::after { background: linear-gradient(180deg, transparent 58vw, var(--bg) 100vw, var(--bg) 100%); } .brand-band { min-height: auto; align-items: flex-end; } .brand-copy { padding-top: 94vw; padding-bottom: 130px; } }
 
 /* ---------- plano ---------- */
 .plan { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 64px); align-items: center; padding: 0 var(--gutter); }
