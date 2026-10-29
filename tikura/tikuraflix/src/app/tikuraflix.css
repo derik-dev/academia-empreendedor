@@ -599,3 +599,31 @@ main, main section, main .section, main .brand-band, main .shelf {
   box-shadow: none !important;
   border-radius: 0;
 }
+
+/* Tarja translúcida dos destaques, com acabamento dourado. */
+.subscription-section .plan-highlights {
+  position: relative;
+  padding: 18px 8px;
+  background: linear-gradient(90deg, rgba(12,9,12,.2), rgba(12,9,12,.64) 20%, rgba(12,9,12,.64) 80%, rgba(12,9,12,.2));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.subscription-section .plan-highlights::before,
+.subscription-section .plan-highlights::after {
+  content: "";
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(201,139,39,.6) 25%, rgba(240,207,120,.8) 50%, rgba(201,139,39,.6) 75%, transparent);
+}
+.subscription-section .plan-highlights::before { top: 0; }
+.subscription-section .plan-highlights::after { bottom: 0; opacity: .55; }
+@media (min-width: 861px) {
+  .subscription-section { background-position: left calc(50% - 48px); }
+}
+@media (max-width: 860px) {
+  .subscription-section { background-position: left -20px; }
+  .subscription-section .plan-highlights { padding: 16px 4px; }
+}
