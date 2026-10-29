@@ -169,7 +169,7 @@ h1, h2, h3, h4 { font-weight: 400; }
 .hero-arrow:hover { opacity: 1; }
 .hero-arrow-prev { left: 12px; }
 .hero-arrow-next { right: 12px; }
-.hero-arrow svg { width: 20px; height: 42px; stroke: currentColor; stroke-width: 1; stroke-linecap: round; stroke-linejoin: round; }
+.hero-arrow svg { width: 20px; height: 42px; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .hero-dots { position: relative; grid-area: 2 / 1; z-index: 5; display: flex; justify-content: center; align-items: center; gap: 4px; padding: 12px 0 42px; }
 .hero-dots button { display: grid; place-items: center; width: 28px; height: 28px; border: 0; background: transparent; padding: 0; }
 .hero-dots button::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.35); transition: background .25s, transform .25s; }
