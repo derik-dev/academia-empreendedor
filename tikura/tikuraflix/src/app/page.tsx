@@ -5,7 +5,7 @@ import Footer from "@/components/Footer";
 import Hero, { type HeroItem } from "@/components/Hero";
 import Shelf from "@/components/Shelf";
 import Reveal from "@/components/Reveal";
-import { IconArrow, IconCheck } from "@/components/Icons";
+import { IconArrow, IconCheck, IconLock, IconPlay, IconDoc, IconMusic, IconUsers } from "@/components/Icons";
 import { getUser } from "@/lib/auth";
 import { getCourseBySlug, getFavoriteIds, getSettings, getShelves } from "@/lib/data";
 import { lockedIdsFor, splitTags, toCard } from "@/lib/catalog";
@@ -125,27 +125,35 @@ export default async function Home() {
           </div>
         </Reveal>
 
-        <section className="section" id="assinatura" style={{ paddingTop: 90 }}>
+        <section className="section subscription-section" id="assinatura">
           <Reveal className="plan">
             <div className="plan-art">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/capas/tikuraflix.webp" alt="Tikuraflix — todas as imersões em um só lugar" width={800} height={1000} loading="lazy" />
+              <p className="plan-topics">Espiritualidade<br />Magia natural<br />Autoconhecimento<br />e expansão da consciência</p>
+              <div className="plan-highlights">
+                <div><IconPlay size={30} /><span><strong>{n.imersoes}+</strong>Imersões<br />e séries</span></div>
+                <div><IconDoc size={34} /><span><strong>30+</strong>Apostilas<br />em PDF</span></div>
+                <div><IconMusic size={32} /><span><strong>Trilhas</strong>Exclusivas</span></div>
+                <div><IconUsers size={34} /><span><strong>Encontros</strong>Com Vanessa Tikura</span></div>
+              </div>
             </div>
             <div className="plan-card">
               <span className="eyebrow">Assinatura anual</span>
-              <h2 className="display">Todo o acervo, <span className="gold-text">por 12 meses</span></h2>
+              <h2 className="display">Todo o acervo <span className="gold-text">por 12 meses</span></h2>
+              <p className="plan-tagline">Centenas de horas de conteúdo<br />para a sua jornada espiritual</p>
+              <div className="plan-ornament" aria-hidden="true">✶</div>
               <div className="price">
                 <span className="big gold-text">R$ {settings.price_cash}</span>
                 <small>à vista · ou {settings.price_installments}</small>
               </div>
               <ul className="checklist">
                 {[
-                  `${n.imersoes} imersões, rodas e aulões em vídeo Full HD`,
-                  "Mais de 30 apostilas em PDF para estudar e imprimir",
-                  "Trilhas de áudio para meditação e práticas guiadas",
-                  "Vivências e rituais guiados por Vanessa Tikura",
-                  "Novos conteúdos entrando no acervo com frequência",
-                  "Assista no celular, tablet, computador ou TV",
+                  `Acesso completo às ${n.imersoes} imersões e séries já lançadas`,
+                  "Novos conteúdos com frequência",
+                  "Vivências guiadas e encontros especiais com Vanessa Tikura",
+                  "Acesso ilimitado à plataforma por 12 meses",
+                  "Mais de 30 apostilas ilustradas em PDF",
+                  "Vídeo-aulas completas de cada imersão",
+                  "Trilhas musicais exclusivas para práticas guiadas",
                   "Suporte pelo WhatsApp",
                 ].map((t) => (
                   <li key={t}><IconCheck size={18} /><span>{t}</span></li>
@@ -154,9 +162,9 @@ export default async function Home() {
               {user ? (
                 <Link href="/minha-area" className="btn btn-gold">Ir para minha área <IconArrow /></Link>
               ) : (
-                <a href={settings.checkout_url} className="btn btn-gold" rel="noopener">Quero meu acesso anual agora <IconArrow /></a>
+                <a href={settings.checkout_url} className="btn btn-gold" rel="noopener"><IconLock size={25} /> Quero entrar agora <IconArrow /></a>
               )}
-              <p className="fine">Pagamento seguro pela Hotmart. Acesso liberado logo após a aprovação.</p>
+              <div className="plan-payment"><IconCheck size={28} /><p>Pagamento seguro pela Hotmart.<br />Acesso liberado logo após a aprovação.</p><span className="plan-hotmart"><span aria-hidden="true">♨</span> hotmart</span></div>
             </div>
           </Reveal>
         </section>

@@ -293,9 +293,8 @@ h1, h2, h3, h4 { font-weight: 400; }
 @media (max-width: 760px) { .top10 { --cols: 1.4; } }
 
 /* ---------- seção da assinatura: fundo de ponta a ponta ---------- */
-#assinatura { position: relative; isolation: isolate; padding: clamp(100px, 11vw, 150px) 0 !important; }
-#assinatura::before { content: ""; position: absolute; inset: 0; z-index: -1;
-  background: radial-gradient(60% 70% at 25% 50%, rgba(201,139,39,.12), transparent 70%), linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 18%, var(--bg-2) 82%, var(--bg) 100%); }
+#assinatura { position: relative; isolation: isolate; padding: 0; }
+#assinatura::before { content: none; }
 
 /* ---------- banda da Vanessa ---------- */
 .brand-band { position: relative; min-height: min(135vh, 1200px); display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
@@ -324,6 +323,73 @@ h1, h2, h3, h4 { font-weight: 400; }
 .checklist svg { flex: none; margin-top: 4px; color: var(--gold-light); }
 .fine { color: var(--muted); font-size: .92rem; margin-top: 16px; }
 @media (max-width: 860px) { .plan { grid-template-columns: 1fr; } .plan-art { max-width: 340px; } }
+
+/* Assinatura: composição com o cenário completo e painel à direita. */
+.subscription-section { padding: 0; margin-top: 90px; background: url(/brand/bg3.jpg) left center / cover no-repeat; }
+.subscription-section .plan { min-height: 56.25vw; grid-template-columns: minmax(0, 1fr) minmax(0, 38%); align-items: stretch; gap: 0; padding: 2.75vw 2vw 3vw 5vw; }
+.subscription-section .plan-art { display: flex; flex-direction: column; justify-content: space-between; max-width: none; width: 100%; border: 0; border-radius: 0; box-shadow: none; overflow: visible; padding: 1vw 3vw 0 0; }
+.plan-topics { align-self: flex-end; margin-right: 12%; border-left: 1px solid var(--gold-light); padding: 6px 0 6px 28px; font-family: var(--font-display); font-size: clamp(9px, .73vw, 14px); letter-spacing: .2em; line-height: 2; text-transform: uppercase; }
+.plan-highlights { display: flex; justify-content: center; align-items: center; gap: 0; padding: 20px 0 0; }
+.plan-highlights > div { display: flex; align-items: center; gap: 14px; padding: 0 clamp(12px, 1.5vw, 26px); }
+.plan-highlights > div + div { border-left: 1px solid var(--gold); }
+.plan-highlights svg { flex: none; color: var(--gold-light); }
+.plan-highlights span { font-size: clamp(8px, .7vw, 12px); text-transform: uppercase; line-height: 1.35; letter-spacing: .07em; }
+.plan-highlights strong { display: block; color: var(--gold-light); font-size: clamp(13px, 1.05vw, 19px); font-weight: 500; }
+.plan-highlights > div:nth-child(-n+2) strong { font-family: var(--font-display); font-size: clamp(21px, 1.7vw, 30px); }
+.subscription-section .plan-card { align-self: center; padding: clamp(22px, 2.5vw, 48px); border: 1px solid var(--gold-light); border-radius: 20px; background: linear-gradient(145deg, rgba(8,6,6,.94), rgba(8,6,6,.87)); }
+.subscription-section .plan-card::before, .subscription-section .plan-card::after { content: ""; position: absolute; right: 10px; width: 14px; height: 3px; border-radius: 50%; background: #fff2c7; box-shadow: 0 0 8px 3px #dba34d; }
+.subscription-section .plan-card::before { top: -2px; }
+.subscription-section .plan-card::after { bottom: -2px; left: 10px; right: auto; }
+.subscription-section .eyebrow { display: flex; align-items: center; gap: 12px; font-size: clamp(10px, .9vw, 16px); letter-spacing: .23em; color: var(--gold-light); }
+.subscription-section .eyebrow::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, var(--gold-dark), transparent); }
+.subscription-section .plan-card h2 { font-size: clamp(28px, 3.9vw, 76px); line-height: .99; letter-spacing: -.035em; margin: 12px 0; white-space: nowrap; }
+.subscription-section .plan-card h2 span { display: block; }
+.plan-tagline { text-transform: uppercase; letter-spacing: .32em; font-family: var(--font-display); font-size: clamp(9px, .93vw, 17px); line-height: 1.7; }
+.plan-ornament { display: flex; align-items: center; gap: 12px; color: var(--gold); font-size: 29px; line-height: 1; margin: 14px 0; }
+.plan-ornament::before, .plan-ornament::after { content: ""; height: 1px; flex: 1; background: linear-gradient(90deg, transparent, var(--gold)); }
+.plan-ornament::after { transform: rotate(180deg); }
+.subscription-section .price { flex-wrap: nowrap; gap: 16px; margin: 0; }
+.subscription-section .price .big { font-size: clamp(42px, 4.6vw, 88px); white-space: nowrap; line-height: 1.2; }
+.subscription-section .price small { color: #e8e4df; font-size: clamp(11px, 1.02vw, 18px); white-space: nowrap; }
+.subscription-section .checklist { gap: clamp(7px, .7vw, 13px); margin: 18px 0 26px; }
+.subscription-section .checklist li { gap: 18px; align-items: center; font-size: clamp(11px, .98vw, 18px); line-height: 1.4; color: #f0eeeb; }
+.subscription-section .checklist svg { width: 25px; height: 25px; border: 1.5px solid var(--gold-light); border-radius: 50%; padding: 4px; margin-top: 0; }
+.subscription-section .plan-card > .btn { width: 100%; justify-content: center; gap: 20px; min-height: clamp(54px, 4.5vw, 82px); padding: 12px; border: 1px solid #ffe4a0; border-radius: 8px; background: linear-gradient(115deg, #f1c75d, #f8dc85 45%, #b7761c); color: #120d06; font-family: var(--font-display); font-size: clamp(16px, 1.5vw, 28px); letter-spacing: .07em; text-transform: uppercase; }
+.plan-payment { display: flex; align-items: center; gap: 14px; margin-top: 20px; color: #bdbab8; }
+.plan-payment > svg { flex: none; color: var(--gold-light); }
+.plan-payment p { font-size: clamp(10px, .92vw, 16px); line-height: 1.5; }
+.plan-hotmart { margin-left: auto; font-size: clamp(12px, 1vw, 18px); font-weight: 700; white-space: nowrap; }
+.plan-hotmart > span { color: #ed623d; font-size: 26px; }
+@media (max-width: 1100px) and (min-width: 861px) {
+  .subscription-section .plan { grid-template-columns: minmax(0, 1fr) minmax(0, 44%); padding-left: 2vw; }
+  .subscription-section .plan-card { padding: 22px; }
+  .subscription-section .plan-card h2 { font-size: 4.1vw; }
+  .plan-highlights { flex-wrap: wrap; gap: 18px 0; }
+  .plan-highlights > div { width: 50%; }
+  .plan-highlights > div:nth-child(3) { border-left: 0; }
+  .plan-topics { margin-right: 0; }
+}
+@media (max-width: 860px) {
+  .subscription-section { background-size: auto 72vw; background-position: left top; }
+  .subscription-section .plan { display: flex; flex-direction: column; padding: 0 20px 32px; }
+  .subscription-section .plan-art { min-height: 70vw; padding: 18px 0; justify-content: flex-end; }
+  .plan-topics { display: none; }
+  .plan-highlights { background: rgba(8,6,6,.82); padding: 14px 0; }
+  .plan-highlights > div { padding: 0 10px; gap: 8px; }
+  .plan-highlights svg { width: 24px; height: 24px; }
+  .subscription-section .plan-card { width: 100%; max-width: 600px; padding: clamp(22px, 5vw, 38px); }
+  .subscription-section .plan-card h2 { font-size: clamp(29px, 7.5vw, 58px); }
+  .subscription-section .eyebrow { font-size: 12px; }
+  .plan-tagline { font-size: clamp(9px, 2.1vw, 14px); }
+  .subscription-section .price .big { font-size: clamp(44px, 10vw, 70px); }
+  .subscription-section .price small { font-size: clamp(10px, 2.6vw, 15px); white-space: normal; }
+  .subscription-section .checklist li { font-size: 14px; gap: 12px; }
+  .subscription-section .checklist { gap: 12px; }
+  .subscription-section .plan-card > .btn { font-size: clamp(16px, 4vw, 23px); gap: 14px; min-height: 62px; }
+  .plan-payment p { font-size: 11px; }
+  .plan-hotmart { font-size: 12px; }
+}
+@media (max-width: 400px) { .plan-highlights { flex-wrap: wrap; gap: 16px 0; } .plan-highlights > div { width: 50%; } .plan-highlights > div:nth-child(3) { border-left: 0; } .plan-hotmart { display: none; } }
 
 /* ---------- faq ---------- */
 .faq { max-width: calc(860px + 2 * var(--pad)); margin: 0 auto; padding: 0 var(--pad); display: grid; gap: 10px; }
