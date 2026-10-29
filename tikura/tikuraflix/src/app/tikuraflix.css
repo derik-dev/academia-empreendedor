@@ -297,9 +297,9 @@ h1, h2, h3, h4 { font-weight: 400; }
 #assinatura::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg, transparent 32%, rgba(16,10,14,.45) 44%, rgba(16,10,14,.94) 56%, #100a0e 68%); }
 
 /* ---------- banda da Vanessa ---------- */
-.brand-band { position: relative; min-height: min(135vh, 1200px); display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
-.brand-band::before { content: ""; position: absolute; inset: 0; z-index: -2; background: url(/brand/cosmos.webp) 60% center / cover no-repeat; }
-.brand-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8,5,10,.95) 0%, rgba(8,5,10,.8) 34%, rgba(8,5,10,.1) 70%); }
+.brand-band { position: relative; min-height: 51.1112vw; display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
+.brand-band::before { content: ""; position: absolute; inset: 0; z-index: -2; background: url(/brand/vanessa-bgheader3.webp) center / auto 100% no-repeat; }
+.brand-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8,5,10,.48) 0%, rgba(8,5,10,.76) 15%, rgba(8,5,10,.8) 34%, rgba(8,5,10,.4) 46%, rgba(8,5,10,.06) 60%, transparent 75%); }
 .brand-copy { width: 100%; padding: clamp(110px, 12vw, 160px) var(--pad) clamp(110px, 12vw, 160px) var(--gutter); max-width: calc(600px + var(--gutter) + var(--pad)); }
 .brand-copy h2 { font-size: clamp(1.9rem, 3.8vw, 3.2rem); margin: 14px 0 18px; }
 @media (min-width: 861px) { .brand-copy h2 { white-space: nowrap; } }
