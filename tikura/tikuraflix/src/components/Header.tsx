@@ -10,7 +10,7 @@ export function Brand() {
   return (
     <Link href="/" className="brand" aria-label="Tikuraflix — início">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/logo2.png" alt="TikuraFlix" width={2140} height={735} />
+      <img src="/brand/logo3.png" alt="TikuraFlix" width={1960} height={802} />
     </Link>
   );
 }
