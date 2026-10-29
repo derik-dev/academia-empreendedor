@@ -589,3 +589,13 @@ main, main section, main .section, main .brand-band, main .shelf {
   box-shadow: none !important;
   border-radius: 0;
 }
+
+/* A faixa de destaques e seu contêiner não recebem contornos. */
+.subscription-section .plan,
+.subscription-section .plan-art,
+.subscription-section .plan-highlights {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0;
+}
