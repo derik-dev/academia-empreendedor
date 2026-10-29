@@ -445,14 +445,14 @@ h1, h2, h3, h4 { font-weight: 400; }
 .faq details p { padding: 0 24px 22px; color: var(--muted); }
 
 /* Acabamento dourado da seção de dúvidas. */
-#duvidas .section-head { position: relative; padding-top: 48px; margin-bottom: 24px; }
-#duvidas .section-head::before { content: "☾"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%) rotate(-20deg); color: #e9bf78; font-family: Georgia, serif; font-size: 46px; line-height: 1; }
+#duvidas .section-head { position: relative; padding-top: 0; margin-bottom: 24px; }
+#duvidas .section-head::before { content: ""; display: block; width: min(540px, 100%); aspect-ratio: 1040 / 193; margin: 0 auto 18px; background: url(/brand/faq-i1.webp) center / contain no-repeat; }
 #duvidas .section-head .eyebrow { display: flex; justify-content: center; align-items: center; gap: 18px; color: #dfb675; }
 #duvidas .section-head .eyebrow::before, #duvidas .section-head .eyebrow::after { content: ""; width: clamp(30px, 8vw, 100px); height: 1px; background: linear-gradient(90deg, transparent, #c59750); }
 #duvidas .section-head .eyebrow::after { transform: rotate(180deg); }
 #duvidas .section-head h2 { font-size: clamp(32px, 4.4vw, 64px); font-weight: 400; color: #f2dfb9; margin-top: 6px; }
 #duvidas .section-head::after { content: "✦"; display: block; width: 240px; margin: 2px auto 0; color: #e8bd76; font-size: 23px; line-height: 1; background: linear-gradient(90deg, transparent, #c59750 42%, transparent 43%, transparent 57%, #c59750 58%, transparent) center / 100% 1px no-repeat; }
-#duvidas .faq { gap: 14px; }
+#duvidas .faq { max-width: calc(720px + 2 * var(--pad)); gap: 14px; }
 #duvidas .faq details { border: 1px solid #b68b4b; border-radius: 16px; background: linear-gradient(110deg, rgba(9,8,10,.94), rgba(17,14,12,.86)); box-shadow: inset 0 0 0 1px rgba(244,210,150,.12), inset 0 2px 12px rgba(214,164,85,.08), 0 0 12px rgba(214,164,85,.14); }
 #duvidas .faq summary { display: grid; grid-template-columns: 46px minmax(0, 1fr) 36px; min-height: 84px; padding: 16px 24px; gap: 22px; font-size: clamp(15px, 1.3vw, 20px); color: #f2e5cd; }
 #duvidas .faq summary::before { content: "✧"; display: flex; align-items: center; height: 38px; border-right: 1px solid rgba(211,166,92,.55); color: #e5bd79; font-family: Georgia, serif; font-size: 30px; }
