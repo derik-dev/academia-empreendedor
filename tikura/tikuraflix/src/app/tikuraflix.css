@@ -212,8 +212,10 @@ h1, h2, h3, h4 { font-weight: 400; }
 .section-head { padding: 0 var(--gutter); margin-bottom: 30px; }
 .section-head h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); margin-top: 10px; }
 .section-head p { color: var(--muted); margin-top: 6px; max-width: 60ch; }
-.paths { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 var(--gutter); }
-.path-chip { display: inline-flex; align-items: center; gap: 10px; padding: 12px 22px; border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(255,255,255,.03); font-size: .98rem; transition: all .25s; }
+#caminhos { padding: 64px 0 8px; scroll-margin-top: var(--header-height); }
+#caminhos .section-head { text-align: center; }
+.paths { display: flex; flex-wrap: nowrap; justify-content: safe center; gap: 10px; margin: 0 var(--gutter); padding: 4px 0 12px; overflow-x: auto; }
+.path-chip { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 10px; padding: 12px clamp(12px, 1.2vw, 18px); border: 1px solid var(--line-strong); border-radius: 999px; background: rgba(255,255,255,.03); font-size: clamp(.82rem, 1.05vw, .98rem); white-space: nowrap; transition: all .25s; }
 .path-chip:hover { background: var(--gold-grad); color: #20120a; border-color: transparent; transform: translateY(-2px); }
 
 /* ---------- fileiras (contidas na coluna central, cards 16:9) ---------- */

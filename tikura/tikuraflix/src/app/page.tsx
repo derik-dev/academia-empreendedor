@@ -1,0 +1,182 @@
+import Link from "next/link";
+import { Fragment } from "react";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import Hero, { type HeroItem } from "@/components/Hero";
+import Shelf from "@/components/Shelf";
+import Reveal from "@/components/Reveal";
+import { IconArrow, IconCheck } from "@/components/Icons";
+import { getUser } from "@/lib/auth";
+import { getCourseBySlug, getFavoriteIds, getSettings, getShelves } from "@/lib/data";
+import { lockedIdsFor, splitTags, toCard } from "@/lib/catalog";
+import { rows } from "@/lib/db";
+import { KINDS, PATHS, type Kind } from "@/data/seed";
+import { HERO_ART } from "@/data/hero";
+import { waLink } from "@/lib/util";
+
+export const dynamic = "force-dynamic";
+
+const FAQ = [
+  ["Como funciona o acesso?", "Assim que a compra é aprovada, você recebe os dados de acesso por e-mail e já pode assistir. É só entrar com seu e-mail e senha, de qualquer dispositivo."],
+  ["Por quanto tempo tenho acesso?", "A assinatura vale por 12 meses, com possibilidade de renovação anual. Durante esse período você assiste quantas vezes quiser."],
+  ["Posso assistir pelo celular e pela TV?", "Pode. A plataforma funciona no celular, tablet, computador e TV. No celular dá para instalar como aplicativo, direto da tela do navegador."],
+  ["Como são as aulas?", "Vídeos gravados em Full HD, com apostilas em PDF e trilhas de áudio para meditação e práticas guiadas. Novos conteúdos entram no acervo com frequência."],
+  ["E se eu tiver dúvidas ou problemas?", "O suporte é feito pelo WhatsApp. É só clicar no botão no rodapé da página."],
+  ["Posso desistir?", "A compra é feita online, então vale o direito de arrependimento de 7 dias previsto em lei."],
+];
+
+export default async function Home() {
+  const [user, settings, shelves, heroCourses] = await Promise.all([
+    getUser(),
+    getSettings(),
+    getShelves(),
+    Promise.all(HERO_ART.map((a) => getCourseBySlug(a.slug))),
+  ]);
+  const allCourses = [...new Map(shelves.flatMap((s) => s.courses).map((c) => [c.id, c])).values()];
+  const [lockedIds, favSet, counts] = await Promise.all([
+    lockedIdsFor(user, allCourses),
+    user ? getFavoriteIds(user.id) : Promise.resolve(new Set<number>()),
+    rows<{ imersoes: number; pdfs: number; audios: number }>(
+      `SELECT (SELECT COUNT(*) FROM courses WHERE access='assinatura' AND status!='rascunho') AS imersoes,
+              (SELECT COUNT(*) FROM materials WHERE kind='pdf') AS pdfs,
+              (SELECT COUNT(*) FROM materials WHERE kind='audio') AS audios`,
+    ),
+  ]);
+  const favIds = [...favSet];
+  const n = counts[0];
+
+  // Hero: só cursos que existem no acervo e estão publicados.
+  const heroItems: HeroItem[] = HERO_ART.flatMap((a, idx) => {
+    const c = heroCourses[idx];
+    if (!c || c.status === "rascunho") return [];
+    return [{
+      id: c.id,
+      slug: c.slug,
+      title: c.title,
+      tagline: a.tagline,
+      text: a.text,
+      desktop: a.desktop,
+      mobile: a.mobile,
+      focus: a.focus ?? "center",
+      kindLabel: KINDS[c.kind as Kind] ?? c.kind,
+      tags: splitTags(c.tags).slice(0, 3),
+    }];
+  });
+
+  const pathAnchors = Object.entries(PATHS)
+    .map(([k, v]) => ({ k, label: v.label, shelf: shelves.find((s) => s.title === v.label) }))
+    .filter((p) => p.shelf);
+
+  return (
+    <>
+      <Header />
+      <main>
+        {heroItems.length > 0 && <Hero items={heroItems} loggedIn={!!user} />}
+
+        <div className="strip" aria-label="Em números">
+          <div><strong className="gold-text">{n.imersoes}</strong><span>imersões, rodas e aulões</span></div>
+          <div><strong className="gold-text">30+</strong><span>apostilas em PDF</span></div>
+          <div><strong className="gold-text">{settings.students_count}</strong><span>alunos já passaram por aqui</span></div>
+          <div><strong className="gold-text">{settings.plan_months} meses</strong><span>de acesso, em qualquer tela</span></div>
+        </div>
+
+        <div id="acervo">
+          {shelves.map((s, idx) => (
+            <Fragment key={s.id}>
+              {s.title === PATHS.taro.label && (
+                <section className="section" id="caminhos" aria-labelledby="caminhos-title">
+                  <div className="section-head">
+                    <h2 className="display" id="caminhos-title">Qual caminho te chama?</h2>
+                  </div>
+                  <div className="paths">
+                    {pathAnchors.map((p) => (
+                      <a key={p.k} className="path-chip" href={`#fileira-${p.shelf!.id}`}>{p.label}</a>
+                    ))}
+                  </div>
+                </section>
+              )}
+            <Shelf
+              key={s.id}
+              id={`fileira-${s.id}`}
+              title={s.title}
+              subtitle={s.subtitle}
+              style={s.style}
+              items={s.courses.map(toCard)}
+              lockedIds={lockedIds}
+              favIds={favIds}
+              loggedIn={!!user}
+              priority={idx < 2}
+            />
+            </Fragment>
+          ))}
+        </div>
+
+        <Reveal className="brand-band">
+          <div className="brand-copy">
+            <span className="eyebrow">Quem conduz</span>
+            <h2 className="display">Vanessa <span className="gold-text">Tikura</span></h2>
+            <p>Benzedeira, doula, terapeuta holística e oraculista. Há mais de {settings.years_count} anos ela transforma saberes ancestrais em caminhos práticos para quem quer cuidar de si e dos outros.</p>
+            <p>No Tikuraflix, cada imersão é uma porta de entrada: você aprende no seu tempo, revê quando quiser e segue no seu caminho com apoio.</p>
+            <div className="brand-facts">
+              <div><strong className="gold-text">+{settings.students_count}</strong><span>alunos</span></div>
+              <div><strong className="gold-text">{settings.years_count}+</strong><span>anos de caminhada</span></div>
+              <div><strong className="gold-text">{n.imersoes}</strong><span>títulos no acervo</span></div>
+            </div>
+          </div>
+        </Reveal>
+
+        <section className="section" id="assinatura" style={{ paddingTop: 90 }}>
+          <Reveal className="plan">
+            <div className="plan-art">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/capas/tikuraflix.webp" alt="Tikuraflix — todas as imersões em um só lugar" width={800} height={1000} loading="lazy" />
+            </div>
+            <div className="plan-card">
+              <span className="eyebrow">Assinatura anual</span>
+              <h2 className="display">Todo o acervo, <span className="gold-text">por 12 meses</span></h2>
+              <div className="price">
+                <span className="big gold-text">R$ {settings.price_cash}</span>
+                <small>à vista · ou {settings.price_installments}</small>
+              </div>
+              <ul className="checklist">
+                {[
+                  `${n.imersoes} imersões, rodas e aulões em vídeo Full HD`,
+                  "Mais de 30 apostilas em PDF para estudar e imprimir",
+                  "Trilhas de áudio para meditação e práticas guiadas",
+                  "Vivências e rituais guiados por Vanessa Tikura",
+                  "Novos conteúdos entrando no acervo com frequência",
+                  "Assista no celular, tablet, computador ou TV",
+                  "Suporte pelo WhatsApp",
+                ].map((t) => (
+                  <li key={t}><IconCheck size={18} /><span>{t}</span></li>
+                ))}
+              </ul>
+              {user ? (
+                <Link href="/minha-area" className="btn btn-gold">Ir para minha área <IconArrow /></Link>
+              ) : (
+                <a href={settings.checkout_url} className="btn btn-gold" rel="noopener">Quero meu acesso anual agora <IconArrow /></a>
+              )}
+              <p className="fine">Pagamento seguro pela Hotmart. Acesso liberado logo após a aprovação.</p>
+            </div>
+          </Reveal>
+        </section>
+
+        <section className="section" id="duvidas">
+          <div className="section-head" style={{ textAlign: "center" }}>
+            <span className="eyebrow">Dúvidas frequentes</span>
+            <h2 className="display">Antes de entrar</h2>
+          </div>
+          <div className="faq">
+            {FAQ.map(([q, a]) => (
+              <details key={q}><summary>{q}</summary><p>{a}</p></details>
+            ))}
+          </div>
+          <div style={{ textAlign: "center", marginTop: 34 }}>
+            <a className="btn btn-ghost" href={waLink(settings.whatsapp, "Olá! Quero saber mais sobre o Tikuraflix")} rel="noopener">Falar no WhatsApp</a>
+          </div>
+        </section>
+      </main>
+      <Footer />
+    </>
+  );
+}
