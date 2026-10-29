@@ -128,7 +128,6 @@ export default async function Home() {
         <section className="section subscription-section" id="assinatura">
           <Reveal className="plan">
             <div className="plan-art">
-              <p className="plan-topics">Espiritualidade<br />Magia natural<br />Autoconhecimento<br />e expansão da consciência</p>
               <div className="plan-highlights">
                 <div><IconPlay size={30} /><span><strong>{n.imersoes}+</strong>Imersões<br />e séries</span></div>
                 <div><IconDoc size={34} /><span><strong>30+</strong>Apostilas<br />em PDF</span></div>

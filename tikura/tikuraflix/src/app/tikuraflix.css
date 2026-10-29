@@ -294,7 +294,7 @@ h1, h2, h3, h4 { font-weight: 400; }
 
 /* ---------- seção da assinatura: fundo de ponta a ponta ---------- */
 #assinatura { position: relative; isolation: isolate; padding: 0; }
-#assinatura::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg, transparent 38%, rgba(16,10,14,.25) 52%, rgba(16,10,14,.88) 66%, #100a0e 100%); }
+#assinatura::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(90deg, transparent 32%, rgba(16,10,14,.45) 44%, rgba(16,10,14,.94) 56%, #100a0e 68%); }
 
 /* ---------- banda da Vanessa ---------- */
 .brand-band { position: relative; min-height: min(135vh, 1200px); display: flex; align-items: center; margin: 100px 0 0; border-block: 0; isolation: isolate; overflow: hidden; }
@@ -327,7 +327,7 @@ h1, h2, h3, h4 { font-weight: 400; }
 /* Assinatura: composição com o cenário completo e painel à direita. */
 .subscription-section { padding: 0; margin-top: 90px; background: var(--bg) url(/brand/bg3.jpg) left center / 92% auto no-repeat; }
 .subscription-section .plan { min-height: 56.25vw; grid-template-columns: minmax(0, 1fr) minmax(0, 38%); align-items: stretch; gap: 0; padding: 2.75vw 2vw 3vw 5vw; }
-.subscription-section .plan-art { display: flex; flex-direction: column; justify-content: space-between; max-width: none; width: 100%; border: 0; border-radius: 0; box-shadow: none; overflow: visible; padding: 1vw 3vw 0 0; }
+.subscription-section .plan-art { display: flex; flex-direction: column; justify-content: flex-end; max-width: none; width: 100%; border: 0; border-radius: 0; box-shadow: none; overflow: visible; padding: 1vw 3vw 0 0; }
 .plan-topics { align-self: flex-end; margin-right: 12%; border-left: 1px solid var(--gold-light); padding: 6px 0 6px 28px; font-family: var(--font-display); font-size: clamp(9px, .73vw, 14px); letter-spacing: .2em; line-height: 2; text-transform: uppercase; }
 .plan-highlights { display: flex; justify-content: center; align-items: center; gap: 0; padding: 20px 0 0; }
 .plan-highlights > div { display: flex; align-items: center; gap: 14px; padding: 0 clamp(12px, 1.5vw, 26px); }
