@@ -237,11 +237,12 @@ h1, h2, h3, h4 { font-weight: 400; }
 @media (max-width: 1100px) { .arrow.l { left: var(--gutter); background: linear-gradient(90deg, rgba(8,5,10,.92), transparent); } .arrow.r { right: var(--gutter); background: linear-gradient(270deg, rgba(8,5,10,.92), transparent); } }
 @media (hover: none) { .arrow { display: none; } }
 
-.card { position: relative; flex: none; width: calc((100% - (var(--cols) - 1) * var(--gap)) / var(--cols)); aspect-ratio: 16/9; border-radius: 6px; scroll-snap-align: start; transition: transform .38s cubic-bezier(.2,.8,.2,1), box-shadow .38s, z-index 0s .38s; z-index: 1; }
+.card { position: relative; flex: none; width: calc((100% - (var(--cols) - 1) * var(--gap)) / var(--cols)); border-radius: 6px; scroll-snap-align: start; transition: transform .38s cubic-bezier(.2,.8,.2,1), box-shadow .38s, z-index 0s .38s; z-index: 1; }
+.card::before { content: ""; display: block; padding-top: calc(56.25% + 20px); }
 .card:first-child { transform-origin: left center; }
 .card:last-child { transform-origin: right center; }
 .card-media { position: absolute; inset: 0; border-radius: 6px; overflow: hidden; background: var(--surface); border: 1px solid rgba(255,255,255,.07); }
-.card-media img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; transition: opacity .5s; }
+.card-media img { width: 100%; height: 100%; object-fit: cover; object-position: center top; transition: opacity .5s; }
 .card-media iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; opacity: 0; transition: opacity .6s; }
 .card.trailer .card-media iframe { opacity: 1; }
 .card.trailer .card-media img { opacity: 0; }
