@@ -581,3 +581,11 @@ main, main section, .section, .brand-band, #acervo, .header, .footer {
   box-shadow: none;
 }
 .shelf-divider, .eyebrow::before { display: none; }
+
+/* Remove também o contorno das seções ao navegar por âncoras. */
+main, main section, main .section, main .brand-band, main .shelf {
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0;
+}
