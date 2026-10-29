@@ -712,3 +712,6 @@ main, main section, main .section, main .brand-band, main .shelf {
 .shelf .shelf-divider::before { content: "✶"; order: 1; color: var(--gold); }
 .shelf .shelf-divider span { background: linear-gradient(90deg, transparent, var(--gold)); }
 .shelf .shelf-divider span:last-child { order: 2; }
+
+/* Respiro acima e abaixo da selecao das dez mais assistidas. */
+.shelf.top10 { padding-block: 60px; }
