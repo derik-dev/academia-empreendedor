@@ -630,3 +630,8 @@ main, main section, main .section, main .brand-band, main .shelf {
   .subscription-section { background-position: left -20px; }
   .subscription-section .plan-highlights { padding: 16px 4px; }
 }
+
+/* Fundo da Vanessa de ponta a ponta no desktop. */
+@media (min-width: 861px) {
+  .brand-band::before { background-size: cover; }
+}
