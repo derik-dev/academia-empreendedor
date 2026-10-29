@@ -705,5 +705,10 @@ main, main section, main .section, main .brand-band, main .shelf {
 }
 
 /* Titulos do acervo com arabesco dourado. */
-.shelf-head h3 { font-size: calc(clamp(1.15rem, 1.9vw, 1.5rem) + 3px); }
+.shelf-head h3 { font-size: calc(clamp(1.15rem, 1.9vw, 1.5rem) + 5px); }
 .shelf .shelf-divider { display: flex; }
+.shelf .shelf-divider { gap: 12px; font-size: 23px; line-height: 1; }
+.shelf .shelf-divider svg { display: none; }
+.shelf .shelf-divider::before { content: "✶"; order: 1; color: var(--gold); }
+.shelf .shelf-divider span { background: linear-gradient(90deg, transparent, var(--gold)); }
+.shelf .shelf-divider span:last-child { order: 2; }
