@@ -444,6 +444,31 @@ h1, h2, h3, h4 { font-weight: 400; }
 .faq details[open] summary::after { transform: rotate(45deg); }
 .faq details p { padding: 0 24px 22px; color: var(--muted); }
 
+/* Acabamento dourado da seção de dúvidas. */
+#duvidas .section-head { position: relative; padding-top: 48px; margin-bottom: 24px; }
+#duvidas .section-head::before { content: "☾"; position: absolute; top: -14px; left: 50%; transform: translateX(-50%) rotate(-20deg); color: #e9bf78; font-family: Georgia, serif; font-size: 46px; line-height: 1; }
+#duvidas .section-head .eyebrow { display: flex; justify-content: center; align-items: center; gap: 18px; color: #dfb675; }
+#duvidas .section-head .eyebrow::before, #duvidas .section-head .eyebrow::after { content: ""; width: clamp(30px, 8vw, 100px); height: 1px; background: linear-gradient(90deg, transparent, #c59750); }
+#duvidas .section-head .eyebrow::after { transform: rotate(180deg); }
+#duvidas .section-head h2 { font-size: clamp(32px, 4.4vw, 64px); font-weight: 400; color: #f2dfb9; margin-top: 6px; }
+#duvidas .section-head::after { content: "✦"; display: block; width: 240px; margin: 2px auto 0; color: #e8bd76; font-size: 23px; line-height: 1; background: linear-gradient(90deg, transparent, #c59750 42%, transparent 43%, transparent 57%, #c59750 58%, transparent) center / 100% 1px no-repeat; }
+#duvidas .faq { gap: 14px; }
+#duvidas .faq details { border: 1px solid #b68b4b; border-radius: 16px; background: linear-gradient(110deg, rgba(9,8,10,.94), rgba(17,14,12,.86)); box-shadow: inset 0 0 0 1px rgba(244,210,150,.12), inset 0 2px 12px rgba(214,164,85,.08), 0 0 12px rgba(214,164,85,.14); }
+#duvidas .faq summary { display: grid; grid-template-columns: 46px minmax(0, 1fr) 36px; min-height: 84px; padding: 16px 24px; gap: 22px; font-size: clamp(15px, 1.3vw, 20px); color: #f2e5cd; }
+#duvidas .faq summary::before { content: "✧"; display: flex; align-items: center; height: 38px; border-right: 1px solid rgba(211,166,92,.55); color: #e5bd79; font-family: Georgia, serif; font-size: 30px; }
+#duvidas .faq summary::after { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border: 1px solid #c59750; border-radius: 50%; color: #deb26b; font-family: Georgia, serif; font-size: 28px; font-weight: 400; line-height: 1; }
+#duvidas .faq details p { padding-left: 92px; padding-right: 80px; }
+#duvidas .faq details:hover, #duvidas .faq details[open] { border-color: #efcf94; box-shadow: inset 0 0 14px rgba(214,164,85,.1), 0 0 16px rgba(214,164,85,.22); }
+#duvidas .btn-ghost { gap: 18px; min-height: 64px; padding: 14px 30px; border: 1px solid #c99e59; border-radius: 12px; background: linear-gradient(110deg, rgba(16,13,11,.96), rgba(8,7,9,.94)); box-shadow: inset 0 0 12px rgba(214,164,85,.12), 0 0 12px rgba(214,164,85,.12); color: #f2e5cd; letter-spacing: .07em; }
+#duvidas .btn-ghost svg { width: 30px; height: 30px; color: #dfb675; flex: none; }
+@media (max-width: 600px) {
+  #duvidas .faq summary { grid-template-columns: 30px minmax(0, 1fr) 30px; min-height: 78px; padding: 14px; gap: 12px; font-size: 14px; }
+  #duvidas .faq summary::before { font-size: 24px; height: 34px; }
+  #duvidas .faq summary::after { width: 30px; height: 30px; font-size: 24px; }
+  #duvidas .faq details p { padding: 0 20px 20px 56px; }
+  #duvidas .section-head .eyebrow { gap: 10px; font-size: 11px; }
+}
+
 /* ---------- rodapé ---------- */
 .footer { border-top: 1px solid var(--line); margin-top: 90px; padding: 48px var(--gutter) 60px; display: flex; flex-wrap: wrap; gap: 28px 60px; justify-content: space-between; color: var(--muted); font-size: .95rem; }
 .footer .links { display: flex; gap: 24px; flex-wrap: wrap; }

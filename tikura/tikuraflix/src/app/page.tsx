@@ -182,7 +182,7 @@ export default async function Home() {
             ))}
           </div>
           <div style={{ textAlign: "center", marginTop: 34 }}>
-            <a className="btn btn-ghost" href={waLink(settings.whatsapp, "Olá! Quero saber mais sobre o Tikuraflix")} rel="noopener">Falar no WhatsApp</a>
+            <a className="btn btn-ghost" href={waLink(settings.whatsapp, "Olá! Quero saber mais sobre o Tikuraflix")} rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20.5 11.7a8.5 8.5 0 0 1-12.6 7.5L3 20.5l1.3-4.7a8.5 8.5 0 1 1 16.2-4.1Z" /><path d="M8.2 7.6c.3-.3.7-.2.9.2l1 2c.2.3.1.5-.2.8l-.6.6a7.1 7.1 0 0 0 3.4 3.3l.6-.8c.2-.3.5-.4.8-.2l2 1c.4.2.4.5.2.9-.5.9-1.2 1.3-2.2 1.1-3.5-.7-6.6-3.7-7.2-7.1-.1-.7.2-1.3.8-1.8Z" /></svg>Falar no WhatsApp</a>
           </div>
         </section>
       </main>
