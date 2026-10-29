@@ -96,7 +96,7 @@ h1, h2, h3, h4 { font-weight: 400; }
 
 /* ---------- header ---------- */
 .header {
-  position: fixed; inset: 0 0 auto 0; z-index: 50; height: var(--header-height);
+  position: absolute; inset: 0 0 auto 0; z-index: 50; height: var(--header-height);
   display: flex; align-items: center; justify-content: space-between; gap: clamp(24px, 3vw, 56px);
   padding: 18px var(--gutter) 0;
   background: rgba(5,3,7,.97);
@@ -280,8 +280,9 @@ h1, h2, h3, h4 { font-weight: 400; }
 .brand-band { position: relative; min-height: min(92vh, 820px); display: flex; align-items: center; margin: 100px 0 0; isolation: isolate; overflow: hidden; }
 .brand-band::before { content: ""; position: absolute; inset: 0; z-index: -2; background: url(/brand/cosmos.webp) 60% center / cover no-repeat; }
 .brand-band::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, rgba(8,5,10,.95) 0%, rgba(8,5,10,.8) 34%, rgba(8,5,10,.1) 70%), linear-gradient(0deg, var(--bg) 0%, transparent 18%), linear-gradient(180deg, var(--bg) 0%, transparent 18%); }
-.brand-copy { padding: clamp(110px, 12vw, 160px) var(--gutter); max-width: calc(640px + var(--gutter)); }
+.brand-copy { width: 100%; padding: clamp(110px, 12vw, 160px) var(--pad) clamp(110px, 12vw, 160px) var(--gutter); max-width: calc(600px + var(--gutter) + var(--pad)); }
 .brand-copy h2 { font-size: clamp(1.9rem, 3.8vw, 3.2rem); margin: 14px 0 18px; }
+@media (min-width: 861px) { .brand-copy h2 { white-space: nowrap; } }
 .brand-copy p { font-size: 1.1rem; color: var(--text); opacity: .92; margin-bottom: 14px; }
 .brand-facts { display: flex; flex-wrap: wrap; gap: 14px 38px; margin-top: 26px; }
 .brand-facts div strong { display: block; font-family: var(--font-display); font-size: 2rem; }
