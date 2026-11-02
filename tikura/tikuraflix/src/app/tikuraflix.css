@@ -119,7 +119,8 @@ h1, h2, h3, h4 { font-weight: 400; }
 .brand { font-family: var(--font-display); font-weight: 600; font-size: 1.45rem; letter-spacing: .14em; display: inline-flex; align-items: baseline; gap: 2px; }
 .brand b { font-weight: 600; }
 .brand img { width: clamp(200px, 22vw, 320px); height: auto; }
-@media (max-width: 520px) { .header .brand img { width: clamp(140px, 37vw, 190px); } }
+.header .brand img { width: clamp(150px, 16.5vw, 240px); }
+@media (max-width: 520px) { .header .brand img { width: clamp(105px, 27.75vw, 142.5px); } }
 .brand span { color: var(--text); font-weight: 500; letter-spacing: .14em; }
 .nav { display: flex; align-items: center; gap: clamp(14px, 2.2vw, 34px); }
 .nav a.link { font-size: .95rem; color: var(--muted); letter-spacing: .04em; transition: color .2s; }
