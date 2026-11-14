@@ -5,24 +5,25 @@ import Footer from "@/components/Footer";
 import Hero, { type HeroItem } from "@/components/Hero";
 import Shelf from "@/components/Shelf";
 import Reveal from "@/components/Reveal";
+import FeatureBanner, { type FeatureBannerItem } from "@/components/FeatureBanner";
 import { IconArrow, IconCheck, IconLock, IconPlay, IconDoc, IconMusic, IconUsers } from "@/components/Icons";
 import { getUser } from "@/lib/auth";
-import { getCourseBySlug, getFavoriteIds, getSettings, getShelves } from "@/lib/data";
+import { getCourseBySlug, getFavoriteIds, getSettings, getShelves, type Course } from "@/lib/data";
 import { lockedIdsFor, splitTags, toCard } from "@/lib/catalog";
 import { rows } from "@/lib/db";
 import { KINDS, PATHS, type Kind } from "@/data/seed";
 import { HERO_ART } from "@/data/hero";
+import { FEATURE_BANNERS } from "@/data/banners";
 import { waLink } from "@/lib/util";
 
 export const dynamic = "force-dynamic";
 
+// Perguntas e respostas iguais às do site oficial (https://www.tikura.com.br/tikuraflix/).
 const FAQ = [
-  ["Como funciona o acesso?", "Assim que a compra é aprovada, você recebe os dados de acesso por e-mail e já pode assistir. É só entrar com seu e-mail e senha, de qualquer dispositivo."],
-  ["Por quanto tempo tenho acesso?", "A assinatura vale por 12 meses, com possibilidade de renovação anual. Durante esse período você assiste quantas vezes quiser."],
-  ["Posso assistir pelo celular e pela TV?", "Pode. A plataforma funciona no celular, tablet, computador e TV. No celular dá para instalar como aplicativo, direto da tela do navegador."],
-  ["Como são as aulas?", "Vídeos gravados em Full HD, com apostilas em PDF e trilhas de áudio para meditação e práticas guiadas. Novos conteúdos entram no acervo com frequência."],
-  ["E se eu tiver dúvidas ou problemas?", "O suporte é feito pelo WhatsApp. É só clicar no botão no rodapé da página."],
-  ["Posso desistir?", "A compra é feita online, então vale o direito de arrependimento de 7 dias previsto em lei."],
+  ["O que está incluso na assinatura?", "Acesso a todas as imersões e aos novos conteúdos lançados enquanto a sua assinatura estiver ativa."],
+  ["Por quanto tempo terei acesso?", "Por 12 meses, com possibilidade de renovação anual."],
+  ["Posso assistir pelo celular?", "Sim. Você assiste de qualquer dispositivo conectado à internet."],
+  ["Há conteúdos novos com frequência?", "Sim. Novas imersões e formações são adicionadas todos os meses."],
 ];
 
 export default async function Home() {
@@ -44,6 +45,47 @@ export default async function Home() {
   ]);
   const favIds = [...favSet];
   const n = counts[0];
+
+  // Continuar assistindo (só para quem está logado e já começou alguma aula) — mesma regra da Minha área.
+  type Cont = Course & { lesson_id: number; lesson_title: string; done_count: number; total: number };
+  const cont = user
+    ? await rows<Cont>(
+        `SELECT c.*, p.lesson_id, l.title AS lesson_title,
+           (SELECT COUNT(*) FROM progress p2 JOIN lessons l2 ON l2.id=p2.lesson_id WHERE p2.user_id=? AND l2.course_id=c.id AND p2.done=1) AS done_count,
+           (SELECT COUNT(*) FROM lessons l3 WHERE l3.course_id=c.id) AS total
+         FROM progress p JOIN lessons l ON l.id=p.lesson_id JOIN courses c ON c.id=l.course_id
+         WHERE p.user_id=? AND c.status!='rascunho' AND p.updated_at = (
+           SELECT MAX(p4.updated_at) FROM progress p4 JOIN lessons l4 ON l4.id=p4.lesson_id WHERE p4.user_id=? AND l4.course_id=c.id)
+         ORDER BY p.updated_at DESC LIMIT 12`,
+        [user.id, user.id, user.id],
+      )
+    : [];
+
+  // Banners full entre as fileiras (src/data/banners.ts): só cursos publicados que estão no acervo.
+  const bannersByShelf = new Map<string, FeatureBannerItem[]>();
+  for (const b of FEATURE_BANNERS) {
+    const c = allCourses.find((x) => x.slug === b.slug);
+    if (!c || c.status === "rascunho") continue;
+    const item: FeatureBannerItem = {
+      slug: c.slug,
+      title: c.title,
+      kindLabel: KINDS[c.kind as Kind] ?? c.kind,
+      pathLabel: PATHS[c.path as keyof typeof PATHS]?.label,
+      eyebrow: b.eyebrow,
+      headline: b.headline,
+      text: b.text,
+      cta: b.cta,
+      note: b.note,
+      tone: b.tone,
+      desktop: b.desktop ?? c.cover,
+      mobile: b.mobile ?? b.desktop ?? c.cover,
+      focus: b.focus ?? "center",
+      trailer: c.trailer,
+      locked: lockedIds.includes(c.id),
+    };
+    bannersByShelf.set(b.afterShelf, [...(bannersByShelf.get(b.afterShelf) ?? []), item]);
+  }
+  let bannerIndex = 0;
 
   // Hero: só cursos que existem no acervo e estão publicados.
   const heroItems: HeroItem[] = HERO_ART.flatMap((a, idx) => {
@@ -80,6 +122,29 @@ export default async function Home() {
           <div><strong className="gold-text">{settings.plan_months} meses</strong><span>de acesso, em qualquer tela</span></div>
         </div>
 
+        {cont.length > 0 && (
+          <section className="shelf continue-shelf" aria-label="Continuar assistindo">
+            <div className="shelf-head"><h3>Continuar assistindo</h3></div>
+            <div className="scroller">
+              {cont.map((c) => {
+                const pct = c.total ? Math.round((c.done_count / c.total) * 100) : 0;
+                return (
+                  <Link key={c.id} href={`/assistir/${c.slug}?aula=${c.lesson_id}`} className="progress-card continue-card">
+                    <div className="card" style={{ width: "100%" }}>
+                      <div className="card-media">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={c.cover.replace(/\.webp$/, "-thumb.webp")} alt={c.title} loading="lazy" />
+                      </div>
+                    </div>
+                    <div className="bar" aria-label={`${pct}% concluído`}><i style={{ width: `${pct}%` }} /></div>
+                    <span className="continue-meta"><strong>{c.title}</strong>{c.lesson_title} · {pct}%</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         <div id="acervo">
           {shelves.map((s, idx) => s.style === "top10" ? null : (
             <Fragment key={s.id}>
@@ -90,7 +155,7 @@ export default async function Home() {
                   </div>
                   <div className="paths">
                     {pathAnchors.map((p) => (
-                      <a key={p.k} className="path-chip" href={`#fileira-${p.shelf!.id}`}>{p.label}</a>
+                      <a key={p.k} className="path-chip" href={`#fileira-${p.shelf!.id}`}>{p.label}<small>{p.shelf!.courses.length}</small></a>
                     ))}
                   </div>
                 </section>
@@ -107,6 +172,9 @@ export default async function Home() {
               loggedIn={!!user}
               priority={idx < 2}
             />
+            {(bannersByShelf.get(s.title) ?? []).map((b) => (
+              <FeatureBanner key={`fb-${b.slug}`} b={b} index={bannerIndex++} />
+            ))}
             </Fragment>
           ))}
         </div>
